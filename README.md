@@ -56,21 +56,32 @@ Catatan build (sudah diterapkan):
 
 ## Kunci tanda tangan APK (sekali saja)
 
-Kunci ini identitas aplikasi Anda selamanya. Kalau hilang, Anda tidak bisa merilis update; kalau bocor,
-orang lain bisa membuat APK palsu atas nama Anda. Simpan cadangannya di tempat aman (bukan di repo).
+Untuk membuild APK release sendiri, Anda perlu kunci tanda tangan **milik Anda sendiri**. Kunci pemilik
+proyek tidak dibagikan. Kunci ini menjadi identitas aplikasi selamanya: kalau hilang, Anda tidak bisa
+merilis update; kalau bocor, orang lain bisa membuat APK palsu atas nama Anda. Simpan cadangannya di
+tempat aman, di luar repo.
+
+Buat sekali saja. Kalau sudah punya, jangan buat lagi: kunci baru tidak bisa meng-update aplikasi yang
+sudah terpasang.
 
 ```bash
-"C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe" -genkeypair -v -keystore D:\kunci\vegamshare-release.jks -alias vegamshare -keyalg RSA -keysize 4096 -validity 10000
+keytool -genkeypair -v -keystore <lokasi>/vegamshare-release.jks -alias vegamshare -keyalg RSA -keysize 4096 -validity 10000
 ```
+
+`keytool` ikut terpasang bersama Java/Android Studio (misalnya di `<Android Studio>\jbr\bin\keytool.exe`).
+Ganti `<lokasi>` dengan folder pilihan Anda di luar repo.
 
 Lalu buat `app/android/key.properties` (sudah di-.gitignore):
 
 ```properties
-storeFile=D:/kunci/vegamshare-release.jks
+storeFile=<lokasi>/vegamshare-release.jks
 storePassword=<password keystore>
 keyAlias=vegamshare
 keyPassword=<password kunci>
 ```
+
+Naikkan `version` di `app/pubspec.yaml` (misalnya `0.1.1+2`) setiap kali membagikan build baru, supaya
+versi yang terpasang bisa dibedakan dan Android menolak memasang versi lama di atas versi baru.
 
 ## Uji manual dengan CLI
 
