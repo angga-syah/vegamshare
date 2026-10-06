@@ -1,0 +1,5 @@
+/target
+*.vegamshare-part
+.dart_tool/
+build/
+/dist
