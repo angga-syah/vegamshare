@@ -1,4 +1,4 @@
-//! Password-free pairing, SHAREit/Bluetooth style.
+//! Password-free pairing, in the style of Bluetooth.
 //!
 //! * **Nearby + code**: the asking device connects without pinning, and both
 //!   sides derive a 6-digit code from the TLS session (exporter). The user

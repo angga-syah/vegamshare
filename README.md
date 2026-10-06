@@ -1,11 +1,10 @@
 # VegamShare
 
-Kirim file dan folder antar **Android ↔ Windows** di jaringan lokal (Wi-Fi/LAN/hotspot yang sama),
-seperti SHAREit tapi dengan model koneksi RustDesk:
+Kirim file dan folder antar HP dan komputer (Android dan Windows, ke arah mana saja) di Wi-Fi, LAN,
+atau hotspot yang sama.
 
-- Setiap perangkat punya **ID 9 digit permanen + password**.
 - **Pairing cukup sekali**, dengan cara apa saja: **ketuk perangkat di sekitar** lalu cocokkan kode
-  6 digit (seperti SHAREit/Bluetooth), **pindai QR**, atau **ID + password** (bisa juga lewat IP).
+  6 digit (seperti pairing Bluetooth), **pindai QR**, atau **ID + password** (bisa juga lewat IP).
   Setelah itu perangkat tersimpan dan untuk mengirim tinggal klik, meskipun IP-nya berubah.
 - Mendukung kirim **folder utuh** (subfolder kosong ikut), **resume** jika terputus, **enkripsi
   end-to-end**, auto-accept per perangkat, dan riwayat.
