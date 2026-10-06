@@ -8,6 +8,7 @@ import '../src/rust/api/vegam.dart' as core;
 import '../state/app_state.dart';
 import '../util/format.dart';
 import '../util/l10n.dart';
+import 'add_device_page.dart' show formatCode;
 import 'common.dart';
 import 'devices_page.dart';
 import 'history_page.dart';
@@ -37,6 +38,11 @@ class _HomeShellState extends State<HomeShell> {
       if (ctx != null && ctx.mounted) Navigator.pop(ctx);
     }));
     _subs.add(appState.finished.listen(_onFinished));
+    _subs.add(appState.pairRequests.listen(_showPairRequest));
+    _subs.add(appState.pairRequestClosed.listen((id) {
+      final ctx = _openOffers.remove(id);
+      if (ctx != null && ctx.mounted) Navigator.pop(ctx);
+    }));
     _subs.add(externalPaths.stream.listen(_chooseDeviceFor));
     if (pendingExternalPaths.isNotEmpty) {
       final p = pendingExternalPaths;
@@ -77,6 +83,35 @@ class _HomeShellState extends State<HomeShell> {
     ).then((accept) {
       if (_openOffers.remove(o.id) == null || accept == null) return;
       core.respondToOffer(transferId: o.id, accept: accept).catchError((_) {});
+    });
+  }
+
+  /// Someone tapped this device on their "Add device" screen.
+  void _showPairRequest(PairRequest r) {
+    showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        _openOffers[r.id] = ctx;
+        final theme = Theme.of(ctx);
+        return AlertDialog(
+          icon: Icon(platformIcon(r.platform)),
+          title: Text(tr('pair_request_title')),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(tr('pair_request_body', {'name': r.fromName}), textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            Text(formatCode(r.code),
+                style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 4)),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('decline'))),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('accept'))),
+          ],
+        );
+      },
+    ).then((accept) {
+      if (_openOffers.remove(r.id) == null || accept == null) return;
+      core.respondToPairRequest(requestId: r.id, accept: accept).catchError((_) {});
     });
   }
 

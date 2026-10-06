@@ -16,6 +16,7 @@ use crate::discovery::{self, Announce, Discovery};
 use crate::error::{Error, Result};
 use crate::identity::{self, CERT_SUBJECT, Fingerprint, Identity};
 use crate::pairing::{self, Lockout, ServerOutcome};
+use crate::quickpair::{self, QrPayload};
 use crate::proto::{self, ErrorCode, MAX_FRAME, MAX_OFFER_FRAME, PeerInfo, Request, Response, close};
 use crate::secret;
 use crate::store::{self, HistoryEntry, Store, TrustedDevice};
@@ -73,6 +74,9 @@ impl Config {
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum Event {
     DeviceStatus { fingerprint: Fingerprint, online: bool },
+    /// Someone nearby wants to pair; show `code` and ask the user.
+    PairRequest { request_id: String, from_name: String, from_platform: String, code: String },
+    PairRequestClosed { request_id: String },
     DevicesChanged,
     NearbyChanged,
     IncomingOffer { transfer_id: String, from: Fingerprint, from_name: String, file_count: u64, total_bytes: u64, summary: String },
@@ -136,6 +140,19 @@ pub(crate) struct Inner {
     /// Woken when a transfer starts, so idle loops can sleep.
     pub activity: tokio::sync::Notify,
     receiving: std::sync::atomic::AtomicBool,
+    /// "Add device" screen open until this moment (accepts PairAsk).
+    pairing_until: Mutex<Option<Instant>>,
+    /// The one pairing request currently shown to the user.
+    pending_pair: Mutex<Option<(String, oneshot::Sender<bool>)>>,
+    qr_tokens: Mutex<quickpair::Tokens>,
+    /// Outgoing nearby pairings waiting for the other user to accept.
+    attempts: Mutex<HashMap<String, PairAttempt>>,
+}
+
+struct PairAttempt {
+    conn: quinn::Connection,
+    recv: quinn::RecvStream,
+    expected_id: String,
 }
 
 pub(crate) fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -439,6 +456,12 @@ impl Inner {
                     self.trust(fingerprint, info, conn.remote_address())?;
                 }
             }
+            Request::PairAsk { info } => {
+                self.handle_pair_ask(&conn, peer, info.sanitized(), send).await?;
+            }
+            Request::PairToken { info, token } => {
+                self.handle_pair_token(&conn, peer, info.sanitized(), &token, send).await?;
+            }
             Request::Offer { info, offer } => {
                 if !trusted {
                     return deny(send).await;
@@ -474,6 +497,106 @@ impl Inner {
         }
         Ok(())
     }
+
+    // ---- password-free pairing (listener side) ------------------------
+
+    fn pairing_open(&self) -> bool {
+        lock(&self.pairing_until).is_some_and(|t| Instant::now() < t)
+    }
+
+    async fn handle_pair_ask(self: &Arc<Self>, conn: &quinn::Connection, peer: Fingerprint, info: PeerInfo, mut send: quinn::SendStream) -> Result<()> {
+        if !self.pairing_open() {
+            proto::write_frame(&mut send, &Response::error(ErrorCode::PairingClosed, "not pairing")).await?;
+            let _ = send.finish();
+            return Ok(());
+        }
+        let code = quickpair::sas_code(conn)?;
+        let request_id = crate::transfer::new_transfer_id();
+        let (tx, rx) = oneshot::channel();
+        let busy = {
+            let mut pending = lock(&self.pending_pair);
+            if pending.is_some() {
+                true
+            } else {
+                *pending = Some((request_id.clone(), tx));
+                false
+            }
+        };
+        if busy {
+            proto::write_frame(&mut send, &Response::error(ErrorCode::Busy, "another request is pending")).await?;
+            let _ = send.finish();
+            return Ok(());
+        }
+        self.emit(Event::PairRequest {
+            request_id: request_id.clone(),
+            from_name: info.name.clone(),
+            from_platform: info.platform.clone(),
+            code,
+        });
+        let accepted = tokio::select! {
+            r = tokio::time::timeout(Duration::from_secs(60), rx) => matches!(r, Ok(Ok(true))),
+            _ = conn.closed() => false,
+        };
+        {
+            let mut pending = lock(&self.pending_pair);
+            if pending.as_ref().is_some_and(|(id, _)| *id == request_id) {
+                *pending = None;
+            }
+        }
+        self.emit(Event::PairRequestClosed { request_id });
+        if accepted {
+            tracing::info!("paired with {} ({}) by code", info.name, info.device_id);
+            self.trust(peer, info, conn.remote_address())?;
+            proto::write_frame(&mut send, &Response::PairOk { info: self.my_info() }).await?;
+        } else {
+            proto::write_frame(&mut send, &Response::Rejected).await?;
+        }
+        let _ = send.finish();
+        Ok(())
+    }
+
+    async fn handle_pair_token(self: &Arc<Self>, conn: &quinn::Connection, peer: Fingerprint, info: PeerInfo, token: &str, mut send: quinn::SendStream) -> Result<()> {
+        // Rate-limited like passwords, although a 128-bit token cannot be guessed.
+        let gate = self.lockout.lock().unwrap_or_else(|e| e.into_inner()).try_attempt(Instant::now());
+        if let Err(wait) = gate {
+            let resp = Response::Error { code: ErrorCode::LockedOut, message: "too many attempts".into(), retry_after: Some(wait) };
+            proto::write_frame(&mut send, &resp).await?;
+            let _ = send.finish();
+            return Ok(());
+        }
+        let valid = token.len() == 32 && hex::decode(token).is_ok_and(|t| lock(&self.qr_tokens).consume(&t));
+        if !valid {
+            proto::write_frame(&mut send, &Response::error(ErrorCode::InvalidCode, "invalid or expired QR code")).await?;
+            let _ = send.finish();
+            return Ok(());
+        }
+        self.lockout.lock().unwrap_or_else(|e| e.into_inner()).success();
+        tracing::info!("paired with {} ({}) by QR code", info.name, info.device_id);
+        self.trust(peer, info, conn.remote_address())?;
+        proto::write_frame(&mut send, &Response::PairOk { info: self.my_info() }).await?;
+        let _ = send.finish();
+        Ok(())
+    }
+
+    /// Where to reach `device_id` for a first pairing: the address the user
+    /// typed (used once, never relied on later), a device seen while
+    /// pairing mode is on, or an ID lookup.
+    async fn pair_addrs(&self, device_id: &str, address: Option<&str>) -> Result<Vec<SocketAddr>> {
+        if let Some(a) = address.map(str::trim).filter(|a| !a.is_empty()) {
+            let addr = a
+                .parse::<SocketAddr>()
+                .or_else(|_| a.parse::<std::net::IpAddr>().map(|ip| SocketAddr::new(ip, DEFAULT_PORT)))
+                .map_err(|_| Error::InvalidArgument(format!("{a} is not an IP address")))?;
+            return Ok(vec![addr]);
+        }
+        let Some(d) = self.discovery() else { return Err(Error::NotFound) };
+        let mut addrs: Vec<SocketAddr> = d.lookup_device_id(device_id).into_iter().map(|s| s.addr).collect();
+        if addrs.is_empty() {
+            addrs = d.find(device_id).await.into_iter().map(|s| s.addr).collect();
+        }
+        if addrs.is_empty() { Err(Error::NotFound) } else { Ok(addrs) }
+    }
+
 
     // ---- background loops ---------------------------------------------
 
@@ -628,6 +751,10 @@ impl Node {
             shutdown: CancellationToken::new(),
             activity: tokio::sync::Notify::new(),
             receiving: std::sync::atomic::AtomicBool::new(receiving),
+            pairing_until: Mutex::new(None),
+            pending_pair: Mutex::new(None),
+            qr_tokens: Mutex::new(quickpair::Tokens::default()),
+            attempts: Mutex::new(HashMap::new()),
             cfg,
         });
 
@@ -729,7 +856,7 @@ impl Node {
     /// "Visible on the network": periodic announcements for the nearby list.
     /// Off by default; pairing by ID works without it.
     pub fn visible(&self) -> bool {
-        self.inner.discovery().is_some_and(|d| d.is_visible())
+        self.inner.discovery().is_some_and(|d| d.visible_setting())
     }
 
     pub fn set_visible(&self, on: bool) -> Result<()> {
@@ -787,23 +914,7 @@ impl Node {
             return Err(Error::InvalidArgument("that is this device's own ID".into()));
         }
 
-        let mut addrs: Vec<SocketAddr> = Vec::new();
-        if let Some(a) = address.map(str::trim).filter(|a| !a.is_empty()) {
-            let addr = a
-                .parse::<SocketAddr>()
-                .or_else(|_| a.parse::<std::net::IpAddr>().map(|ip| SocketAddr::new(ip, DEFAULT_PORT)))
-                .map_err(|_| Error::InvalidArgument(format!("{a} is not an IP address")))?;
-            addrs.push(addr);
-        }
-        if addrs.is_empty()
-            && let Some(d) = inner.discovery()
-        {
-            addrs.extend(d.find(&device_id).await.into_iter().map(|s| s.addr));
-        }
-        if addrs.is_empty() {
-            return Err(Error::NotFound);
-        }
-
+        let addrs = inner.pair_addrs(&device_id, address).await?;
         let mut last_err = Error::NotFound;
         for addr in addrs {
             let conn = match inner.dial(addr, None).await {
@@ -836,6 +947,167 @@ impl Node {
         }
         Err(last_err)
     }
+
+    /// "Add device" screen open/closed. While open (at most two minutes per
+    /// call) this device is visible and accepts code-confirmed pairing.
+    pub fn set_pairing_mode(&self, on: bool) {
+        let inner = &self.inner;
+        if on {
+            *lock(&inner.pairing_until) = Some(Instant::now() + quickpair::QR_TTL);
+            if let Some(d) = inner.discovery() {
+                d.set_temp_visible(true);
+            }
+            let me = inner.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(quickpair::QR_TTL + Duration::from_millis(50)).await;
+                let expired = lock(&me.pairing_until).is_none_or(|t| Instant::now() >= t);
+                if expired {
+                    *lock(&me.pairing_until) = None;
+                    if let Some(d) = me.discovery() {
+                        d.set_temp_visible(false);
+                    }
+                }
+            });
+        } else {
+            *lock(&inner.pairing_until) = None;
+            lock(&inner.qr_tokens).revoke_all();
+            if let Some(d) = inner.discovery() {
+                d.set_temp_visible(false);
+            }
+        }
+    }
+
+    pub fn respond_to_pair_request(&self, request_id: &str, accept: bool) -> Result<()> {
+        let mut pending = lock(&self.inner.pending_pair);
+        match pending.take() {
+            Some((id, tx)) if id == request_id => {
+                let _ = tx.send(accept);
+                Ok(())
+            }
+            other => {
+                *pending = other;
+                Err(Error::UnknownTransfer)
+            }
+        }
+    }
+
+    /// Step 1 of tap-to-pair: connects and returns `(attempt_id, code)`.
+    /// Show the code; the other user accepts if it matches theirs.
+    pub async fn pair_nearby_start(&self, device_id: &str, address: Option<&str>) -> Result<(String, String)> {
+        let inner = &self.inner;
+        let device_id = identity::normalize_device_id(device_id).ok_or_else(|| Error::InvalidArgument("device ID must be 9 digits".into()))?;
+        if device_id == inner.identity.device_id {
+            return Err(Error::InvalidArgument("that is this device's own ID".into()));
+        }
+        let mut last_err = Error::NotFound;
+        for addr in inner.pair_addrs(&device_id, address).await? {
+            let conn = match inner.dial(addr, None).await {
+                Ok(c) => c,
+                Err(e) => {
+                    last_err = e;
+                    continue;
+                }
+            };
+            let code = quickpair::sas_code(&conn)?;
+            let (mut send, recv) = conn.open_bi().await?;
+            proto::write_frame(&mut send, &Request::PairAsk { info: inner.my_info() }).await?;
+            let _ = send.finish();
+            let attempt_id = crate::transfer::new_transfer_id();
+            lock(&inner.attempts).insert(attempt_id.clone(), PairAttempt { conn, recv, expected_id: device_id.clone() });
+            return Ok((attempt_id, code));
+        }
+        Err(last_err)
+    }
+
+    /// Step 2: waits (up to 90 s) for the other user's decision.
+    pub async fn pair_nearby_finish(&self, attempt_id: &str) -> Result<TrustedDevice> {
+        let inner = &self.inner;
+        let attempt = lock(&inner.attempts).remove(attempt_id).ok_or(Error::UnknownTransfer)?;
+        let PairAttempt { conn, mut recv, expected_id } = attempt;
+        let result = async {
+            match tokio::time::timeout(Duration::from_secs(90), proto::read_frame(&mut recv, MAX_FRAME)).await?? {
+                Response::PairOk { info } => {
+                    let info = info.sanitized();
+                    if info.device_id != expected_id {
+                        return Err(Error::InvalidArgument("a different device answered".into()));
+                    }
+                    let fp = tls::peer_fingerprint(&conn).ok_or_else(|| Error::protocol("peer has no certificate"))?;
+                    inner.trust(fp, info, conn.remote_address())
+                }
+                other => Err(other.into_error()),
+            }
+        }
+        .await;
+        conn.close(close::NORMAL.into(), b"");
+        result
+    }
+
+    pub fn pair_nearby_cancel(&self, attempt_id: &str) {
+        let attempt = lock(&self.inner.attempts).remove(attempt_id);
+        if let Some(a) = attempt {
+            a.conn.close(close::CANCELLED.into(), b"cancelled");
+        }
+    }
+
+    /// A fresh single-use QR pairing code (valid two minutes).
+    pub fn pair_qr_code(&self) -> String {
+        let inner = &self.inner;
+        let port = inner.endpoint.local_addr().map(|a| a.port()).unwrap_or(DEFAULT_PORT);
+        let token = lock(&inner.qr_tokens).issue();
+        QrPayload {
+            device_id: inner.identity.device_id.clone(),
+            fingerprint: inner.identity.fingerprint,
+            addrs: discovery::local_addresses().into_iter().map(|ip| SocketAddr::from((ip, port))).collect(),
+            token,
+        }
+        .encode()
+    }
+
+    /// Pairs with the device whose QR code was scanned. No password, no prompt.
+    pub async fn pair_with_qr(&self, scanned: &str) -> Result<TrustedDevice> {
+        let inner = &self.inner;
+        let qr = QrPayload::decode(scanned)?;
+        if qr.device_id == inner.identity.device_id {
+            return Err(Error::InvalidArgument("that is this device's own code".into()));
+        }
+        let mut conn = None;
+        for addr in &qr.addrs {
+            if let Ok(c) = inner.dial(*addr, Some(qr.fingerprint)).await {
+                conn = Some(c);
+                break;
+            }
+        }
+        if conn.is_none()
+            && let Some(d) = inner.discovery()
+        {
+            for seen in d.find(&qr.device_id).await {
+                if let Ok(c) = inner.dial(seen.addr, Some(qr.fingerprint)).await {
+                    conn = Some(c);
+                    break;
+                }
+            }
+        }
+        let conn = conn.ok_or(Error::Unreachable)?;
+        let result = async {
+            let (mut send, mut recv) = conn.open_bi().await?;
+            proto::write_frame(&mut send, &Request::PairToken { info: inner.my_info(), token: hex::encode(qr.token) }).await?;
+            let _ = send.finish();
+            match tokio::time::timeout(REQUEST_TIMEOUT, proto::read_frame(&mut recv, MAX_FRAME)).await?? {
+                Response::PairOk { info } => {
+                    let info = info.sanitized();
+                    if info.device_id != qr.device_id {
+                        return Err(Error::InvalidArgument("a different device answered".into()));
+                    }
+                    inner.trust(qr.fingerprint, info, conn.remote_address())
+                }
+                other => Err(other.into_error()),
+            }
+        }
+        .await;
+        conn.close(close::NORMAL.into(), b"");
+        result
+    }
+
 
     pub fn forget_device(&self, fp: &Fingerprint) -> Result<()> {
         self.inner.store.remove_device(fp)?;

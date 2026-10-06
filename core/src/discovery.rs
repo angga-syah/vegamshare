@@ -91,6 +91,8 @@ pub(crate) struct Discovery {
     visible: AtomicBool,
     /// Answer queries for our own ID (off while not receiving).
     answering: AtomicBool,
+    /// Temporarily visible while the "Add device" screen is open.
+    temp_visible: AtomicBool,
     /// Wakes the housekeeping loop when visibility changes.
     wake: tokio::sync::Notify,
 }
@@ -132,6 +134,7 @@ impl Discovery {
             on_change,
             visible: AtomicBool::new(false),
             answering: AtomicBool::new(true),
+            temp_visible: AtomicBool::new(false),
             wake: tokio::sync::Notify::new(),
         });
         d.join_groups();
@@ -181,7 +184,24 @@ impl Discovery {
     }
 
     pub(crate) fn is_visible(&self) -> bool {
+        self.visible.load(Ordering::SeqCst) || self.temp_visible.load(Ordering::SeqCst)
+    }
+
+    /// The persistent "visible" setting, ignoring pairing mode.
+    pub(crate) fn visible_setting(&self) -> bool {
         self.visible.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn set_temp_visible(self: &Arc<Self>, on: bool) {
+        let was = self.temp_visible.swap(on, Ordering::SeqCst);
+        if was != on {
+            self.wake.notify_one();
+        }
+        if on && !was {
+            // Ask everyone visible to introduce themselves right away.
+            let me = self.clone();
+            tokio::spawn(async move { me.send_packet_all(Kind::Query, None).await });
+        }
     }
 
     pub(crate) fn set_answering(&self, on: bool) {

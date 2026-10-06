@@ -69,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1393201437;
+  int get rustContentHash => 590955174;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -107,6 +107,19 @@ abstract class RustLibApi extends BaseApi {
     required String password,
   });
 
+  Future<void> crateApiVegamPairNearbyCancel({required String attemptId});
+
+  Future<Device> crateApiVegamPairNearbyFinish({required String attemptId});
+
+  Future<PairStart> crateApiVegamPairNearbyStart({
+    required String deviceId,
+    String? address,
+  });
+
+  String crateApiVegamPairQrCode();
+
+  Future<Device> crateApiVegamPairWithQr({required String scanned});
+
   Future<void> crateApiVegamPause({required String transferId});
 
   Future<void> crateApiVegamPing({required String fingerprint});
@@ -120,6 +133,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiVegamRespondToOffer({
     required String transferId,
+    required bool accept,
+  });
+
+  Future<void> crateApiVegamRespondToPairRequest({
+    required String requestId,
     required bool accept,
   });
 
@@ -138,6 +156,8 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiVegamSetDeviceName({required String name});
 
   Future<void> crateApiVegamSetDownloadDir({required String dir});
+
+  Future<void> crateApiVegamSetPairingMode({required bool on_});
 
   Future<void> crateApiVegamSetPassword({required String password});
 
@@ -470,6 +490,153 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<void> crateApiVegamPairNearbyCancel({required String attemptId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(attemptId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiVegamPairNearbyCancelConstMeta,
+        argValues: [attemptId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVegamPairNearbyCancelConstMeta =>
+      const TaskConstMeta(
+        debugName: "pair_nearby_cancel",
+        argNames: ["attemptId"],
+      );
+
+  @override
+  Future<Device> crateApiVegamPairNearbyFinish({required String attemptId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(attemptId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_device,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiVegamPairNearbyFinishConstMeta,
+        argValues: [attemptId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVegamPairNearbyFinishConstMeta =>
+      const TaskConstMeta(
+        debugName: "pair_nearby_finish",
+        argNames: ["attemptId"],
+      );
+
+  @override
+  Future<PairStart> crateApiVegamPairNearbyStart({
+    required String deviceId,
+    String? address,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(deviceId, serializer);
+          sse_encode_opt_String(address, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 14,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_pair_start,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiVegamPairNearbyStartConstMeta,
+        argValues: [deviceId, address],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVegamPairNearbyStartConstMeta =>
+      const TaskConstMeta(
+        debugName: "pair_nearby_start",
+        argNames: ["deviceId", "address"],
+      );
+
+  @override
+  String crateApiVegamPairQrCode() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiVegamPairQrCodeConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVegamPairQrCodeConstMeta =>
+      const TaskConstMeta(debugName: "pair_qr_code", argNames: []);
+
+  @override
+  Future<Device> crateApiVegamPairWithQr({required String scanned}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(scanned, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 16,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_device,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiVegamPairWithQrConstMeta,
+        argValues: [scanned],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVegamPairWithQrConstMeta =>
+      const TaskConstMeta(debugName: "pair_with_qr", argNames: ["scanned"]);
+
+  @override
   Future<void> crateApiVegamPause({required String transferId}) {
     return handler.executeNormal(
       NormalTask(
@@ -479,7 +646,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 17,
             port: port_,
           );
         },
@@ -507,7 +674,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 18,
             port: port_,
           );
         },
@@ -534,7 +701,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 19,
             port: port_,
           );
         },
@@ -566,7 +733,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 20,
             port: port_,
           );
         },
@@ -600,7 +767,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 21,
             port: port_,
           );
         },
@@ -622,6 +789,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiVegamRespondToPairRequest({
+    required String requestId,
+    required bool accept,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(requestId, serializer);
+          sse_encode_bool(accept, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 22,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiVegamRespondToPairRequestConstMeta,
+        argValues: [requestId, accept],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVegamRespondToPairRequestConstMeta =>
+      const TaskConstMeta(
+        debugName: "respond_to_pair_request",
+        argNames: ["requestId", "accept"],
+      );
+
+  @override
   Future<void> crateApiVegamResume({required String transferId}) {
     return handler.executeNormal(
       NormalTask(
@@ -631,7 +833,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 23,
             port: port_,
           );
         },
@@ -663,7 +865,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 24,
             port: port_,
           );
         },
@@ -697,7 +899,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 25,
             port: port_,
           );
         },
@@ -727,7 +929,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 26,
             port: port_,
           );
         },
@@ -755,7 +957,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 27,
             port: port_,
           );
         },
@@ -774,6 +976,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "set_download_dir", argNames: ["dir"]);
 
   @override
+  Future<void> crateApiVegamSetPairingMode({required bool on_}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_bool(on_, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 28,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiVegamSetPairingModeConstMeta,
+        argValues: [on_],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVegamSetPairingModeConstMeta =>
+      const TaskConstMeta(debugName: "set_pairing_mode", argNames: ["on_"]);
+
+  @override
   Future<void> crateApiVegamSetPassword({required String password}) {
     return handler.executeNormal(
       NormalTask(
@@ -783,7 +1013,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 29,
             port: port_,
           );
         },
@@ -811,7 +1041,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 30,
             port: port_,
           );
         },
@@ -839,7 +1069,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 31,
             port: port_,
           );
         },
@@ -866,7 +1096,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 32,
             port: port_,
           );
         },
@@ -894,7 +1124,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1076,6 +1306,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_i_64(raw);
+  }
+
+  @protected
+  PairStart dco_decode_pair_start(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return PairStart(
+      attemptId: dco_decode_String(arr[0]),
+      code: dco_decode_String(arr[1]),
+    );
   }
 
   @protected
@@ -1379,6 +1621,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PairStart sse_decode_pair_start(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_attemptId = sse_decode_String(deserializer);
+    var var_code = sse_decode_String(deserializer);
+    return PairStart(attemptId: var_attemptId, code: var_code);
+  }
+
+  @protected
   StartConfig sse_decode_start_config(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_dataDir = sse_decode_String(deserializer);
@@ -1650,6 +1900,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (self != null) {
       sse_encode_box_autoadd_i_64(self, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_pair_start(PairStart self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.attemptId, serializer);
+    sse_encode_String(self.code, serializer);
   }
 
   @protected

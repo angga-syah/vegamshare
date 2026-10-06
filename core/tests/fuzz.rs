@@ -6,6 +6,7 @@ use std::path::{Component, Path};
 use proptest::prelude::*;
 use vegamshare_core::pathsafe::{self, sanitize_component, validate};
 use vegamshare_core::proto::{Offer, PairConfirm, Request, Response};
+use vegamshare_core::quickpair::QrPayload;
 
 /// Path-ish strings biased towards the characters attackers use.
 fn evil_path() -> impl Strategy<Value = String> {
@@ -81,6 +82,13 @@ proptest! {
         let _ = serde_json::from_slice::<Response>(&bytes);
         let _ = serde_json::from_slice::<Offer>(&bytes);
         let _ = serde_json::from_slice::<PairConfirm>(&bytes);
+    }
+
+    #[test]
+    fn qr_parser_never_panics(s in any::<String>(), tail in any::<String>()) {
+        let _ = QrPayload::decode(&s);
+        let _ = QrPayload::decode(&format!("vegamshare://pair?{tail}"));
+        let _ = QrPayload::decode(&format!("vegamshare://pair?v=1&id=123456789&fp={tail}&t={s}&a={tail}"));
     }
 
     #[test]

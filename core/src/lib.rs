@@ -9,6 +9,7 @@ mod node;
 mod pairing;
 pub mod pathsafe;
 pub mod proto;
+pub mod quickpair;
 pub mod secret;
 pub mod store;
 mod tls;

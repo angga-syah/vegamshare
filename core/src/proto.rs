@@ -105,6 +105,10 @@ pub enum Request {
     File { transfer_id: String, index: u32, offset: u64 },
     /// Receiver asks the sender to continue a paused or interrupted transfer.
     Resume { transfer_id: String },
+    /// Password-free pairing confirmed by the user comparing a 6-digit code.
+    PairAsk { info: PeerInfo },
+    /// Pairing with the single-use token from a scanned QR code.
+    PairToken { info: PeerInfo, token: String },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -122,6 +126,10 @@ pub enum ErrorCode {
     Busy,
     HashMismatch,
     UnknownTransfer,
+    /// The device is not on its "Add device" screen.
+    PairingClosed,
+    /// QR pairing code unknown, used or expired.
+    InvalidCode,
     Internal,
 }
 
@@ -134,6 +142,7 @@ pub enum Response {
     Accepted { offsets: Vec<u64> },
     Rejected,
     Ok,
+    PairOk { info: PeerInfo },
     Error { code: ErrorCode, message: String, retry_after: Option<u64> },
 }
 
@@ -151,6 +160,8 @@ impl Response {
                 ErrorCode::LockedOut => Error::LockedOut(retry_after.unwrap_or(60)),
                 ErrorCode::UnknownTransfer => Error::UnknownTransfer,
                 ErrorCode::HashMismatch => Error::Integrity(message),
+                ErrorCode::PairingClosed => Error::PairingClosed,
+                ErrorCode::InvalidCode => Error::InvalidCode,
                 _ => Error::Protocol(format!("peer error {code:?}: {message}")),
             },
             Response::Rejected => Error::Rejected,

@@ -81,6 +81,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
 
   @protected
+  PairStart dco_decode_pair_start(dynamic raw);
+
+  @protected
   StartConfig dco_decode_start_config(dynamic raw);
 
   @protected
@@ -159,6 +162,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  PairStart sse_decode_pair_start(SseDeserializer deserializer);
 
   @protected
   StartConfig sse_decode_start_config(SseDeserializer deserializer);
@@ -261,6 +267,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     PlatformInt64? self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_pair_start(PairStart self, SseSerializer serializer);
 
   @protected
   void sse_encode_start_config(StartConfig self, SseSerializer serializer);

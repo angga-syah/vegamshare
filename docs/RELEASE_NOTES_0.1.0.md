@@ -5,7 +5,8 @@ banyak HP. Mohon laporkan masalah lewat Issues.
 
 ## Fitur
 - Kirim file dan **folder utuh** antar Android ↔ Windows di Wi-Fi/LAN yang sama, tanpa internet atau server.
-- **ID 9 digit permanen + password**. Pairing cukup sekali; setelah itu tinggal klik.
+- **Pairing cukup sekali**, dengan pilihan cara: ketuk perangkat di sekitar lalu cocokkan kode 6 digit,
+  pindai QR, atau ID 9 digit + password (bisa juga lewat IP). Setelah itu tinggal klik, walaupun IP berubah.
 - **Hemat baterai, mirip earphone Bluetooth**: aplikasi diam total sampai Anda mengirim. Tidak ada
   pengumuman ke jaringan dan tidak ada pengecekan di latar belakang.
 - Tombol **Siap menerima** On/Off.

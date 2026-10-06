@@ -23,8 +23,8 @@ const Map<String, List<String>> _t = {
   'change_password': ['Ganti password', 'Change password'],
   'paired_devices': ['Perangkat tersimpan', 'Saved devices'],
   'no_paired': [
-    'Belum ada perangkat. Tekan "Tambah" lalu masukkan ID dan password perangkat lain (cukup sekali).',
-    'No devices yet. Tap "Add" and enter the other device\'s ID and password (only once).'
+    'Belum ada perangkat. Tekan "Tambah" di kedua perangkat, lalu ketuk perangkat yang muncul. Cukup sekali.',
+    'No devices yet. Tap "Add" on both devices, then tap the one that shows up. Only needed once.'
   ],
   'nearby': ['Terdeteksi di jaringan', 'On this network'],
   'no_nearby': ['Tidak ada perangkat VegamShare lain di jaringan ini.', 'No other VegamShare devices on this network.'],
@@ -38,8 +38,36 @@ const Map<String, List<String>> _t = {
   ],
   'device_id': ['ID perangkat (9 digit)', 'Device ID (9 digits)'],
   'ip_optional': ['Alamat IP (opsional)', 'IP address (optional)'],
-  'ip_help': ['Isi hanya jika perangkat tidak terdeteksi otomatis', 'Only if the device is not found automatically'],
+  'ip_help': [
+    'Cadangan untuk pairing pertama saja. Setelah tersimpan, perangkat ditemukan otomatis walau IP berubah.',
+    'Fallback for the first pairing only. Once saved, the device is found automatically even if its IP changes.'
+  ],
   'connect': ['Hubungkan', 'Connect'],
+  'close': ['Tutup', 'Close'],
+  'pair_hint_title': ['Buka layar ini di kedua perangkat', 'Open this screen on both devices'],
+  'pair_hint': [
+    'Selama layar ini terbuka, perangkat saling terlihat. Pairing cukup sekali; setelah itu tinggal klik untuk mengirim.',
+    'While this screen is open, devices can see each other. Pair once; after that, just tap to send.'
+  ],
+  'searching_nearby': [
+    'Mencari… Pastikan perangkat lain di Wi-Fi yang sama juga membuka layar Tambah perangkat.',
+    'Searching… Make sure the other device on the same Wi-Fi also has Add device open.'
+  ],
+  'other_ways': ['Cara lain', 'Other ways'],
+  'show_my_qr': ['Tampilkan QR saya', 'Show my QR code'],
+  'show_my_qr_sub': ['Pindai dengan HP lain, tersambung tanpa mengetik', 'Scan it with another phone to pair without typing'],
+  'scan_qr': ['Pindai QR', 'Scan QR code'],
+  'scan_qr_sub': ['Arahkan kamera ke QR di layar perangkat lain', 'Point the camera at the QR on the other device'],
+  'qr_hint': ['Sekali pakai, berlaku 2 menit, diperbarui otomatis.', 'Single use, valid 2 minutes, renewed automatically.'],
+  'pair_with_password': ['ID + password', 'ID + password'],
+  'pair_with_password_sub': ['Kalau perangkat tidak muncul di atas. Bisa juga lewat IP.', 'If the device does not show up above. Works with an IP too.'],
+  'compare_code': ['Pastikan kode ini sama dengan yang tampil di {name}:', 'Check that {name} shows the same code:'],
+  'waiting_accept': ['Menunggu {name} menekan Terima…', 'Waiting for {name} to accept…'],
+  'pair_request_title': ['Permintaan pairing', 'Pairing request'],
+  'pair_request_body': [
+    '{name} ingin terhubung. Terima hanya jika kode ini sama dengan yang tampil di {name}:',
+    '{name} wants to connect. Accept only if {name} shows the same code:'
+  ],
   'cancel': ['Batal', 'Cancel'],
   'save': ['Simpan', 'Save'],
   'paired_ok': ['Tersimpan: {name}', 'Saved: {name}'],
@@ -138,6 +166,11 @@ const Map<String, List<String>> _t = {
     'Device identity mismatch: possibly an impostor. Connection refused.'
   ],
   'e_rejected': ['Ditolak oleh penerima.', 'Declined by the receiver.'],
+  'e_invalid_code': ['Kode QR tidak valid, sudah dipakai, atau kedaluwarsa. Minta QR baru.', 'QR code is invalid, already used or expired. Ask for a new one.'],
+  'e_pairing_closed': [
+    'Perangkat tujuan tidak sedang membuka layar Tambah perangkat.',
+    'The other device is not on its Add device screen.'
+  ],
   'e_timeout': ['Waktu habis.', 'Timed out.'],
   'e_generic': ['Terjadi kesalahan: {detail}', 'Something went wrong: {detail}'],
 };
@@ -168,6 +201,8 @@ String describeError(Object error) {
     case 'not_trusted':
     case 'identity_mismatch':
     case 'rejected':
+    case 'pairing_closed':
+    case 'invalid_code':
     case 'timeout':
       return tr('e_$code');
     default:

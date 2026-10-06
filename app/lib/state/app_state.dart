@@ -59,6 +59,14 @@ class IncomingOffer {
   final String summary;
 }
 
+class PairRequest {
+  PairRequest(this.id, this.fromName, this.platform, this.code);
+  final String id;
+  final String fromName;
+  final String platform;
+  final String code;
+}
+
 class FinishedNotice {
   FinishedNotice(this.id, this.outgoing, this.status, this.error, this.location);
   final String id;
@@ -82,6 +90,10 @@ class AppState extends ChangeNotifier {
   final _offers = StreamController<IncomingOffer>.broadcast();
   final _offerClosed = StreamController<String>.broadcast();
   final _finished = StreamController<FinishedNotice>.broadcast();
+  final _pairRequests = StreamController<PairRequest>.broadcast();
+  final _pairClosed = StreamController<String>.broadcast();
+  Stream<PairRequest> get pairRequests => _pairRequests.stream;
+  Stream<String> get pairRequestClosed => _pairClosed.stream;
   Stream<IncomingOffer> get offers => _offers.stream;
   Stream<String> get offerClosed => _offerClosed.stream;
   Stream<FinishedNotice> get finished => _finished.stream;
@@ -180,6 +192,10 @@ class AppState extends ChangeNotifier {
           (e['total_bytes'] as num).toInt(),
           e['summary'],
         ));
+      case 'pair_request':
+        _pairRequests.add(PairRequest(e['request_id'], e['from_name'], e['from_platform'], e['code']));
+      case 'pair_request_closed':
+        _pairClosed.add(e['request_id']);
       case 'offer_closed':
         _offerClosed.add(e['transfer_id']);
       case 'transfer_started':

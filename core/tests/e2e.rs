@@ -408,3 +408,87 @@ async fn visible_mode_lists_device() {
     .await;
     assert!(listed.is_ok(), "visible device should appear in the nearby list");
 }
+
+// ---- password-free pairing ----------------------------------------------
+
+async fn next_pair_request(rx: &mut Receiver<Event>) -> (String, String) {
+    tokio::time::timeout(WAIT, async {
+        loop {
+            if let Ok(Event::PairRequest { request_id, code, .. }) = rx.recv().await {
+                return (request_id, code);
+            }
+        }
+    })
+    .await
+    .expect("pair request arrives")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn tap_to_pair_with_matching_code() {
+    let tmp = tempfile::tempdir().unwrap();
+    let a = TestNode::start(&tmp.path().join("a"), "A").await;
+    let b = TestNode::start(&tmp.path().join("b"), "B").await;
+    a.node.set_pairing_mode(true);
+    let mut arx = a.node.subscribe();
+
+    let (attempt, code_b) = b.node.pair_nearby_start(&a.id(), Some(&a.addr())).await.unwrap();
+    let (request, code_a) = next_pair_request(&mut arx).await;
+    assert_eq!(code_a, code_b, "both screens show the same code");
+    assert_eq!(code_a.len(), 6);
+    a.node.respond_to_pair_request(&request, true).unwrap();
+    let d = b.node.pair_nearby_finish(&attempt).await.unwrap();
+    assert_eq!(d.fingerprint, a.node.fingerprint());
+    assert_eq!(a.node.devices().unwrap()[0].device.fingerprint, b.node.fingerprint());
+
+    // Saved: sending works with no further pairing.
+    let f = tmp.path().join("ketuk.txt");
+    std::fs::write(&f, b"tanpa password").unwrap();
+    let mut rx = b.node.subscribe();
+    let id = b.node.send_paths(&a.node.fingerprint(), vec![f]).await.unwrap();
+    assert_eq!(wait_finished(&mut rx, &id).await.0, TransferStatus::Completed);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn tap_to_pair_declined_or_closed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let a = TestNode::start(&tmp.path().join("a"), "A").await;
+    let b = TestNode::start(&tmp.path().join("b"), "B").await;
+
+    // Not on the "Add device" screen: refused without asking anyone.
+    let (attempt, _) = b.node.pair_nearby_start(&a.id(), Some(&a.addr())).await.unwrap();
+    let r = b.node.pair_nearby_finish(&attempt).await;
+    assert!(matches!(r, Err(Error::PairingClosed)), "{r:?}");
+
+    a.node.set_pairing_mode(true);
+    let mut arx = a.node.subscribe();
+    let (attempt, _) = b.node.pair_nearby_start(&a.id(), Some(&a.addr())).await.unwrap();
+    let (request, _) = next_pair_request(&mut arx).await;
+    a.node.respond_to_pair_request(&request, false).unwrap();
+    let r = b.node.pair_nearby_finish(&attempt).await;
+    assert!(matches!(r, Err(Error::Rejected)), "{r:?}");
+    assert!(a.node.devices().unwrap().is_empty());
+    assert!(b.node.devices().unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_pairing_is_single_use_and_pinned() {
+    let tmp = tempfile::tempdir().unwrap();
+    let a = TestNode::start(&tmp.path().join("a"), "A").await;
+    let b = TestNode::start(&tmp.path().join("b"), "B").await;
+    let c = TestNode::start(&tmp.path().join("c"), "C").await;
+
+    let qr = a.node.pair_qr_code();
+    let d = b.node.pair_with_qr(&qr).await.expect("scan pairs");
+    assert_eq!(d.fingerprint, a.node.fingerprint());
+    assert_eq!(a.node.devices().unwrap().len(), 1);
+
+    // A photo of the same QR is useless afterwards.
+    let r = c.node.pair_with_qr(&qr).await;
+    assert!(matches!(r, Err(Error::InvalidCode)), "{r:?}");
+
+    // A QR pointing at A's address but with someone else's key is refused.
+    let forged = a.node.pair_qr_code().replace(&a.node.fingerprint().to_string(), &c.node.fingerprint().to_string());
+    let r = b.node.pair_with_qr(&forged).await;
+    assert!(r.is_err(), "{r:?}");
+    assert_eq!(a.node.devices().unwrap().len(), 1, "C never got trusted");
+}

@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1393201437;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 590955174;
 
 // Section: executor
 
@@ -431,6 +431,184 @@ fn wire__crate__api__vegam__pair_impl(
         },
     )
 }
+fn wire__crate__api__vegam__pair_nearby_cancel_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "pair_nearby_cancel",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_attempt_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::vegam::pair_nearby_cancel(api_attempt_id)?;
+                        std::result::Result::Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__vegam__pair_nearby_finish_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "pair_nearby_finish",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_attempt_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::vegam::pair_nearby_finish(api_attempt_id).await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__vegam__pair_nearby_start_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "pair_nearby_start",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_device_id = <String>::sse_decode(&mut deserializer);
+            let api_address = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::vegam::pair_nearby_start(api_device_id, api_address)
+                                .await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__vegam__pair_qr_code_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "pair_qr_code",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::vegam::pair_qr_code()?;
+                    std::result::Result::Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
+fn wire__crate__api__vegam__pair_with_qr_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "pair_with_qr",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scanned = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::vegam::pair_with_qr(api_scanned).await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__vegam__pause_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -603,6 +781,43 @@ fn wire__crate__api__vegam__respond_to_offer_impl(
                     (move || {
                         let output_ok =
                             crate::api::vegam::respond_to_offer(api_transfer_id, api_accept)?;
+                        std::result::Result::Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__vegam__respond_to_pair_request_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "respond_to_pair_request",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_request_id = <String>::sse_decode(&mut deserializer);
+            let api_accept = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok =
+                            crate::api::vegam::respond_to_pair_request(api_request_id, api_accept)?;
                         std::result::Result::Ok(output_ok)
                     })(),
                 )
@@ -784,6 +999,41 @@ fn wire__crate__api__vegam__set_download_dir_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
                         let output_ok = crate::api::vegam::set_download_dir(api_dir)?;
+                        std::result::Result::Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__vegam__set_pairing_mode_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_pairing_mode",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_on = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::vegam::set_pairing_mode(api_on)?;
                         std::result::Result::Ok(output_ok)
                     })(),
                 )
@@ -1206,6 +1456,18 @@ impl SseDecode for Option<i64> {
     }
 }
 
+impl SseDecode for crate::api::vegam::PairStart {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_attemptId = <String>::sse_decode(deserializer);
+        let mut var_code = <String>::sse_decode(deserializer);
+        return crate::api::vegam::PairStart {
+            attempt_id: var_attemptId,
+            code: var_code,
+        };
+    }
+}
+
 impl SseDecode for crate::api::vegam::StartConfig {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1307,21 +1569,29 @@ fn pde_ffi_dispatcher_primary_impl(
         8 => wire__crate__api__vegam__init_app_impl(port, ptr, rust_vec_len, data_len),
         10 => wire__crate__api__vegam__nearby_impl(port, ptr, rust_vec_len, data_len),
         11 => wire__crate__api__vegam__pair_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__vegam__pause_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__vegam__ping_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__vegam__regenerate_password_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__vegam__rename_device_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__vegam__respond_to_offer_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__vegam__resume_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__vegam__send_paths_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__vegam__set_auto_accept_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__vegam__set_device_name_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__vegam__set_download_dir_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__vegam__set_password_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__vegam__set_receiving_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__vegam__set_visible_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__vegam__shutdown_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__vegam__start_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__vegam__pair_nearby_cancel_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__vegam__pair_nearby_finish_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__vegam__pair_nearby_start_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__vegam__pair_with_qr_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__vegam__pause_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__vegam__ping_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__vegam__regenerate_password_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__vegam__rename_device_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__vegam__respond_to_offer_impl(port, ptr, rust_vec_len, data_len),
+        22 => {
+            wire__crate__api__vegam__respond_to_pair_request_impl(port, ptr, rust_vec_len, data_len)
+        }
+        23 => wire__crate__api__vegam__resume_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__vegam__send_paths_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__vegam__set_auto_accept_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__vegam__set_device_name_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__vegam__set_download_dir_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__vegam__set_pairing_mode_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__vegam__set_password_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__vegam__set_receiving_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__vegam__set_visible_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__vegam__shutdown_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__vegam__start_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1335,6 +1605,7 @@ fn pde_ffi_dispatcher_sync_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         9 => wire__crate__api__vegam__my_info_impl(ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__vegam__pair_qr_code_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1435,6 +1706,24 @@ impl flutter_rust_bridge::IntoDart for crate::api::vegam::Nearby {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::vegam::Nearby {}
 impl flutter_rust_bridge::IntoIntoDart<crate::api::vegam::Nearby> for crate::api::vegam::Nearby {
     fn into_into_dart(self) -> crate::api::vegam::Nearby {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::vegam::PairStart {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.attempt_id.into_into_dart().into_dart(),
+            self.code.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::vegam::PairStart {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::vegam::PairStart>
+    for crate::api::vegam::PairStart
+{
+    fn into_into_dart(self) -> crate::api::vegam::PairStart {
         self
     }
 }
@@ -1659,6 +1948,14 @@ impl SseEncode for Option<i64> {
         if let Some(value) = self {
             <i64>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::api::vegam::PairStart {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.attempt_id, serializer);
+        <String>::sse_encode(self.code, serializer);
     }
 }
 

@@ -64,6 +64,12 @@ pub enum Error {
     #[error("data corrupted in transit: {0}")]
     Integrity(String),
 
+    #[error("the other device is not on its Add device screen")]
+    PairingClosed,
+
+    #[error("pairing code is invalid, already used or expired")]
+    InvalidCode,
+
     #[error("timed out")]
     Timeout,
 }

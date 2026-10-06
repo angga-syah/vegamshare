@@ -10,6 +10,7 @@ import '../platform/platform_services.dart' show setBackgroundService;
 import '../src/rust/api/vegam.dart' as core;
 import '../util/format.dart';
 import '../util/l10n.dart';
+import 'add_device_page.dart';
 import 'common.dart';
 import 'device_page.dart';
 
@@ -21,7 +22,7 @@ class DevicesPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(tr('app_name'))),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showAddDeviceDialog(context),
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddDevicePage())),
         icon: const Icon(Icons.add_link),
         label: Text(tr('add_device')),
       ),
@@ -46,7 +47,7 @@ class DevicesPage extends StatelessWidget {
                     title: Text(n.name),
                     subtitle: Text('ID ${n.deviceId}  ·  ${n.address.split(':').first}'),
                     trailing: FilledButton.tonal(
-                      onPressed: () => showAddDeviceDialog(context, deviceId: n.deviceId),
+                      onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddDevicePage())),
                       child: Text(tr('connect')),
                     ),
                   ),
@@ -209,10 +210,6 @@ class _DeviceTileState extends State<DeviceTile> {
       child: tile,
     );
   }
-}
-
-Future<void> showAddDeviceDialog(BuildContext context, {String? deviceId}) {
-  return showDialog(context: context, builder: (_) => AddDeviceDialog(deviceId: deviceId));
 }
 
 class AddDeviceDialog extends StatefulWidget {

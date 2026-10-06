@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `code`, `device_dto`, `err`, `fp`, `my_info_dto`, `node`, `on_rt`, `rt`
+// These functions are ignored because they are not marked as `pub`: `code`, `device_dto`, `device_of`, `err`, `fp`, `my_info_dto`, `node`, `on_rt`, `rt`
 
 /// Starts the background service once; later calls return the same info.
 Future<MyInfo> start({required StartConfig config}) =>
@@ -49,6 +49,37 @@ Future<Device> pair({
   address: address,
   password: password,
 );
+
+/// "Add device" screen open: visible and accepting code-confirmed pairing.
+Future<void> setPairingMode({required bool on_}) =>
+    RustLib.instance.api.crateApiVegamSetPairingMode(on_: on_);
+
+Future<void> respondToPairRequest({
+  required String requestId,
+  required bool accept,
+}) => RustLib.instance.api.crateApiVegamRespondToPairRequest(
+  requestId: requestId,
+  accept: accept,
+);
+
+Future<PairStart> pairNearbyStart({
+  required String deviceId,
+  String? address,
+}) => RustLib.instance.api.crateApiVegamPairNearbyStart(
+  deviceId: deviceId,
+  address: address,
+);
+
+Future<Device> pairNearbyFinish({required String attemptId}) =>
+    RustLib.instance.api.crateApiVegamPairNearbyFinish(attemptId: attemptId);
+
+Future<void> pairNearbyCancel({required String attemptId}) =>
+    RustLib.instance.api.crateApiVegamPairNearbyCancel(attemptId: attemptId);
+
+String pairQrCode() => RustLib.instance.api.crateApiVegamPairQrCode();
+
+Future<Device> pairWithQr({required String scanned}) =>
+    RustLib.instance.api.crateApiVegamPairWithQr(scanned: scanned);
 
 Future<void> forgetDevice({required String fingerprint}) =>
     RustLib.instance.api.crateApiVegamForgetDevice(fingerprint: fingerprint);
@@ -305,6 +336,24 @@ class Nearby {
           platform == other.platform &&
           address == other.address &&
           paired == other.paired;
+}
+
+class PairStart {
+  final String attemptId;
+  final String code;
+
+  const PairStart({required this.attemptId, required this.code});
+
+  @override
+  int get hashCode => attemptId.hashCode ^ code.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PairStart &&
+          runtimeType == other.runtimeType &&
+          attemptId == other.attemptId &&
+          code == other.code;
 }
 
 class StartConfig {

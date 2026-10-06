@@ -48,6 +48,8 @@ fn code(e: &Error) -> &'static str {
         Error::Timeout => "timeout",
         Error::Io(_) => "io",
         Error::UnknownTransfer => "unknown_transfer",
+        Error::PairingClosed => "pairing_closed",
+        Error::InvalidCode => "invalid_code",
         _ => "internal",
     }
 }
@@ -263,6 +265,61 @@ pub async fn pair(device_id: String, address: Option<String>, password: String) 
         .find(|v| v.device.fingerprint == fp)
         .map(device_dto)
         .ok_or_else(|| anyhow::anyhow!("internal|paired device missing"))
+}
+
+async fn device_of(d: vegamshare_core::TrustedDevice) -> anyhow::Result<Device> {
+    let fp = d.fingerprint;
+    node()?
+        .devices()
+        .map_err(err)?
+        .into_iter()
+        .find(|v| v.device.fingerprint == fp)
+        .map(device_dto)
+        .ok_or_else(|| anyhow::anyhow!("internal|paired device missing"))
+}
+
+/// "Add device" screen open: visible and accepting code-confirmed pairing.
+pub fn set_pairing_mode(on: bool) -> anyhow::Result<()> {
+    let n = node()?.clone();
+    rt().spawn(async move { n.set_pairing_mode(on) });
+    Ok(())
+}
+
+pub fn respond_to_pair_request(request_id: String, accept: bool) -> anyhow::Result<()> {
+    node()?.respond_to_pair_request(&request_id, accept).map_err(err)
+}
+
+pub struct PairStart {
+    pub attempt_id: String,
+    pub code: String,
+}
+
+pub async fn pair_nearby_start(device_id: String, address: Option<String>) -> anyhow::Result<PairStart> {
+    let n = node()?.clone();
+    let (attempt_id, code) = on_rt(async move { n.pair_nearby_start(&device_id, address.as_deref()).await }).await?.map_err(err)?;
+    Ok(PairStart { attempt_id, code })
+}
+
+pub async fn pair_nearby_finish(attempt_id: String) -> anyhow::Result<Device> {
+    let n = node()?.clone();
+    let d = on_rt(async move { n.pair_nearby_finish(&attempt_id).await }).await?.map_err(err)?;
+    device_of(d).await
+}
+
+pub fn pair_nearby_cancel(attempt_id: String) -> anyhow::Result<()> {
+    node()?.pair_nearby_cancel(&attempt_id);
+    Ok(())
+}
+
+#[frb(sync)]
+pub fn pair_qr_code() -> anyhow::Result<String> {
+    Ok(node()?.pair_qr_code())
+}
+
+pub async fn pair_with_qr(scanned: String) -> anyhow::Result<Device> {
+    let n = node()?.clone();
+    let d = on_rt(async move { n.pair_with_qr(&scanned).await }).await?.map_err(err)?;
+    device_of(d).await
 }
 
 pub fn forget_device(fingerprint: String) -> anyhow::Result<()> {

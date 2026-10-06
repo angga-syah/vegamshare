@@ -16,6 +16,11 @@ commands:
   devices                      paired devices (# = index for other commands)
   nearby                       devices seen on the network
   pair <id> <password> [ip]    pair once with another device
+  pairmode on|off              be visible and accept tap-to-pair (2 min)
+  pairnear <id> [ip]           tap-to-pair: shows a code to compare
+  acceptpair <request>         accept a tap-to-pair request (rejectpair to refuse)
+  qr                           print a single-use pairing QR payload
+  pairqr <payload>             pair using another device's QR payload
   send <#> <path> [path...]    send files/folders to paired device #
   accept <transfer> | reject <transfer>
   pause <transfer> | resume <transfer> | cancel <transfer>
@@ -109,7 +114,10 @@ fn print_event(e: &Event) {
             }
             println!();
         }
-        Event::DevicesChanged | Event::NearbyChanged | Event::OfferClosed { .. } => {}
+        Event::PairRequest { request_id, from_name, code, .. } => {
+            println!("* {from_name} wants to pair, code {code}. Type: acceptpair {request_id}")
+        }
+        Event::DevicesChanged | Event::NearbyChanged | Event::OfferClosed { .. } | Event::PairRequestClosed { .. } => {}
     }
 }
 
@@ -150,6 +158,20 @@ async fn run_command(node: &Node, line: &str) -> Result<bool, String> {
         }
         ["pair", id, password, rest @ ..] => {
             let d = node.pair(id, rest.first().copied(), password).await.map_err(err)?;
+            println!("paired with {} (ID {})", d.display_name(), d.device_id);
+        }
+        ["pairmode", v @ ("on" | "off")] => node.set_pairing_mode(*v == "on"),
+        ["pairnear", id, rest @ ..] => {
+            let (attempt, code) = node.pair_nearby_start(id, rest.first().copied()).await.map_err(err)?;
+            println!("code {code}: confirm it on the other device...");
+            let d = node.pair_nearby_finish(&attempt).await.map_err(err)?;
+            println!("paired with {} (ID {})", d.display_name(), d.device_id);
+        }
+        ["acceptpair", id] => node.respond_to_pair_request(id, true).map_err(err)?,
+        ["rejectpair", id] => node.respond_to_pair_request(id, false).map_err(err)?,
+        ["qr"] => println!("{}", node.pair_qr_code()),
+        ["pairqr", payload] => {
+            let d = node.pair_with_qr(payload).await.map_err(err)?;
             println!("paired with {} (ID {})", d.display_name(), d.device_id);
         }
         ["send", idx, paths @ ..] if !paths.is_empty() => {

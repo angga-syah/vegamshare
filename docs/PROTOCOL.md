@@ -51,6 +51,8 @@ the device looks absent.
 | `{"type":"offer","info":PeerInfo,"offer":Offer}` | paired | `accepted {offsets}` / `rejected` / `error` |
 | `{"type":"file","transfer_id","index","offset"}` + bytes + 32-byte BLAKE3 | paired | `ok` / `error` |
 | `{"type":"resume","transfer_id"}` | paired | `ok` / `error` |
+| `{"type":"pair_ask","info":PeerInfo}` | anyone, only while the listener is on its "Add device" screen | `pair_ok {info}` / `rejected` / `error pairing_closed` |
+| `{"type":"pair_token","info":PeerInfo,"token":hex}` | anyone holding a valid QR token | `pair_ok {info}` / `error invalid_code` |
 
 `PeerInfo = {device_id, name, platform, version}`.
 Errors: `{"type":"error","code":"not_trusted|wrong_password|locked_out|bad_request|busy|hash_mismatch|unknown_transfer|internal","message","retry_after"}`.
@@ -71,6 +73,25 @@ Errors: `{"type":"error","code":"not_trusted|wrong_password|locked_out|bad_reque
 
 The listener allows 5 attempts, then requires 30 s between attempts,
 doubling up to 1 h. It resets after success or 15 quiet minutes.
+
+## Password-free pairing
+
+**Tap + code.** The listener's "Add device" screen turns on pairing mode for
+two minutes at a time (renewed while open). During pairing mode the device is
+temporarily visible (announces). The asker dials without pinning and sends
+`pair_ask`. Both sides derive a 6-digit code from TLS keying material (label
+`EXPORTER-vegamshare-sas`, 8 bytes, big-endian, mod 10^6). The listener shows
+the code and asks its user; the asker shows the same code. On acceptance the
+listener answers `pair_ok` and both pin each other's fingerprint. Only one
+request is pending at a time; it expires after 60 s.
+
+**QR code.** `vegamshare://pair?v=1&id=<device id>&fp=<64 hex>&a=<ip:port,...>&t=<32 hex>`.
+The token is random, single-use and valid for 2 minutes (at most 4 live). The
+scanner dials the listed addresses with `fp` pinned (falling back to an ID
+lookup) and sends `pair_token`. The listener checks the token in constant time
+under the same rate limit as passwords, then answers `pair_ok`.
+
+Every method is needed only once per pair of devices.
 
 ## Transfers
 
