@@ -69,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 590955174;
+  int get rustContentHash => 985059273;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -162,8 +162,6 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiVegamSetPassword({required String password});
 
   Future<void> crateApiVegamSetReceiving({required bool on_});
-
-  Future<void> crateApiVegamSetVisible({required bool on_});
 
   Future<void> crateApiVegamShutdown();
 
@@ -1060,34 +1058,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "set_receiving", argNames: ["on_"]);
 
   @override
-  Future<void> crateApiVegamSetVisible({required bool on_}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_bool(on_, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 31,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiVegamSetVisibleConstMeta,
-        argValues: [on_],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiVegamSetVisibleConstMeta =>
-      const TaskConstMeta(debugName: "set_visible", argNames: ["on_"]);
-
-  @override
   Future<void> crateApiVegamShutdown() {
     return handler.executeNormal(
       NormalTask(
@@ -1096,7 +1066,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1124,7 +1094,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 32,
             port: port_,
           );
         },
@@ -1201,20 +1171,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   HistoryItem dco_decode_history_item(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return HistoryItem(
       transferId: dco_decode_String(arr[0]),
-      outgoing: dco_decode_bool(arr[1]),
-      peer: dco_decode_String(arr[2]),
-      peerName: dco_decode_String(arr[3]),
-      summary: dco_decode_String(arr[4]),
-      fileCount: dco_decode_u_64(arr[5]),
-      totalBytes: dco_decode_u_64(arr[6]),
-      status: dco_decode_String(arr[7]),
-      location: dco_decode_opt_String(arr[8]),
-      startedAt: dco_decode_i_64(arr[9]),
-      finishedAt: dco_decode_opt_box_autoadd_i_64(arr[10]),
+      kind: dco_decode_String(arr[1]),
+      outgoing: dco_decode_bool(arr[2]),
+      peer: dco_decode_String(arr[3]),
+      peerName: dco_decode_String(arr[4]),
+      summary: dco_decode_String(arr[5]),
+      fileCount: dco_decode_u_64(arr[6]),
+      totalBytes: dco_decode_u_64(arr[7]),
+      status: dco_decode_String(arr[8]),
+      location: dco_decode_opt_String(arr[9]),
+      startedAt: dco_decode_i_64(arr[10]),
+      finishedAt: dco_decode_opt_box_autoadd_i_64(arr[11]),
     );
   }
 
@@ -1264,8 +1235,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   MyInfo dco_decode_my_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return MyInfo(
       deviceId: dco_decode_String(arr[0]),
       deviceIdFormatted: dco_decode_String(arr[1]),
@@ -1277,7 +1248,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       password: dco_decode_String(arr[7]),
       downloadDir: dco_decode_String(arr[8]),
       receiving: dco_decode_bool(arr[9]),
-      visible: dco_decode_bool(arr[10]),
     );
   }
 
@@ -1454,6 +1424,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   HistoryItem sse_decode_history_item(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_transferId = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
     var var_outgoing = sse_decode_bool(deserializer);
     var var_peer = sse_decode_String(deserializer);
     var var_peerName = sse_decode_String(deserializer);
@@ -1466,6 +1437,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_finishedAt = sse_decode_opt_box_autoadd_i_64(deserializer);
     return HistoryItem(
       transferId: var_transferId,
+      kind: var_kind,
       outgoing: var_outgoing,
       peer: var_peer,
       peerName: var_peerName,
@@ -1565,7 +1537,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_password = sse_decode_String(deserializer);
     var var_downloadDir = sse_decode_String(deserializer);
     var var_receiving = sse_decode_bool(deserializer);
-    var var_visible = sse_decode_bool(deserializer);
     return MyInfo(
       deviceId: var_deviceId,
       deviceIdFormatted: var_deviceIdFormatted,
@@ -1577,7 +1548,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       password: var_password,
       downloadDir: var_downloadDir,
       receiving: var_receiving,
-      visible: var_visible,
     );
   }
 
@@ -1777,6 +1747,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_history_item(HistoryItem self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.transferId, serializer);
+    sse_encode_String(self.kind, serializer);
     sse_encode_bool(self.outgoing, serializer);
     sse_encode_String(self.peer, serializer);
     sse_encode_String(self.peerName, serializer);
@@ -1866,7 +1837,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.password, serializer);
     sse_encode_String(self.downloadDir, serializer);
     sse_encode_bool(self.receiving, serializer);
-    sse_encode_bool(self.visible, serializer);
   }
 
   @protected

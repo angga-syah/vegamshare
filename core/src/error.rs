@@ -70,13 +70,55 @@ pub enum Error {
     #[error("pairing code is invalid, already used or expired")]
     InvalidCode,
 
+    /// A different VegamShare install now answers at the device's last
+    /// address: most likely the app was reinstalled (new identity).
+    #[error("{name} answered with a different identity (ID {device_id}); pair again")]
+    IdentityChanged { name: String, device_id: String },
+
     #[error("timed out")]
     Timeout,
+
+    /// The link dropped in the middle of a transfer (resumable).
+    #[error("connection lost during the transfer")]
+    ConnectionLost,
 }
 
 impl Error {
     pub(crate) fn protocol(msg: impl Into<String>) -> Self {
         Error::Protocol(msg.into())
+    }
+
+    /// Stable machine-readable name, used by the UI to pick a message.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Error::WrongPassword => "wrong_password",
+            Error::LockedOut(_) => "locked_out",
+            Error::NotFound => "not_found",
+            Error::Unreachable => "unreachable",
+            Error::NotTrusted => "not_trusted",
+            Error::IdentityMismatch => "identity_mismatch",
+            Error::IdentityChanged { .. } => "identity_changed",
+            Error::Rejected => "rejected",
+            Error::InvalidArgument(_) => "invalid_argument",
+            Error::InvalidPath(_) => "invalid_path",
+            Error::Timeout => "timeout",
+            Error::Io(_) => "io",
+            Error::UnknownTransfer => "unknown_transfer",
+            Error::PairingClosed => "pairing_closed",
+            Error::InvalidCode => "invalid_code",
+            Error::ConnectionLost | Error::Connection(_) => "connection_lost",
+            _ => "internal",
+        }
+    }
+
+    /// Machine-readable payload for the UI, where a variant has one: the new
+    /// device ID for `IdentityChanged`, the wait in seconds for `LockedOut`.
+    pub fn detail(&self) -> Option<String> {
+        match self {
+            Error::IdentityChanged { device_id, .. } => Some(device_id.clone()),
+            Error::LockedOut(s) => Some(s.to_string()),
+            _ => None,
+        }
     }
 }
 

@@ -67,7 +67,13 @@ class _DevicePageState extends State<DevicePage> {
       await core.ping(fingerprint: d.fingerprint);
       if (mounted) showSnack(context, tr('reachable'));
     } catch (e) {
-      if (mounted) showSnack(context, describeError(e));
+      if (!mounted) return;
+      final parts = errorParts(e);
+      if (parts?.$1 == 'identity_changed') {
+        await offerPairAgain(context, d.fingerprint, d.displayName, tr('identity_changed_body', {'name': d.displayName, 'id': parts!.$2}));
+      } else {
+        showSnack(context, describeError(e));
+      }
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -79,7 +85,18 @@ class _DevicePageState extends State<DevicePage> {
       listenable: appState,
       builder: (context, _) {
         final d = appState.deviceByFingerprint(widget.fingerprint);
-        if (d == null) return const Scaffold();
+        if (d == null) {
+          // The device was removed (here or elsewhere): this page has nothing
+          // to show, so close it as soon as it is on top again. Reading the
+          // route here makes this rebuild when a page above it closes.
+          final route = ModalRoute.of(context);
+          if (route != null && route.isCurrent) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && route.isCurrent) Navigator.of(context).pop();
+            });
+          }
+          return const Scaffold();
+        }
         final scheme = Theme.of(context).colorScheme;
         final history = appState.history.where((h) => h.peer == d.fingerprint).take(30).toList();
 

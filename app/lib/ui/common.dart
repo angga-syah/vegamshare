@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../src/rust/api/vegam.dart' as core;
 import '../util/l10n.dart';
+import 'add_device_page.dart';
 import 'file_browser_page.dart';
 
 IconData platformIcon(String platform) => switch (platform) {
@@ -66,6 +67,28 @@ Future<List<String>> pickFolder(BuildContext context) async {
   }
   final d = await FilePicker.platform.getDirectoryPath(lockParentWindow: true);
   return d == null ? [] : [d];
+}
+
+/// The saved device answered with a new identity: offer to forget it and
+/// pair again (the old pairing can never work again).
+Future<void> offerPairAgain(BuildContext context, String fingerprint, String name, String detail) async {
+  final again = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      icon: const Icon(Icons.sync_problem),
+      title: Text(tr('identity_changed_title')),
+      content: Text(detail),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('cancel'))),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('pair_again'))),
+      ],
+    ),
+  );
+  if (again != true) return;
+  await core.forgetDevice(fingerprint: fingerprint);
+  if (context.mounted) {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddDevicePage()));
+  }
 }
 
 class SectionHeader extends StatelessWidget {

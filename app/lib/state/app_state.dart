@@ -68,11 +68,14 @@ class PairRequest {
 }
 
 class FinishedNotice {
-  FinishedNotice(this.id, this.outgoing, this.status, this.error, this.location);
+  FinishedNotice(this.id, this.outgoing, this.peer, this.status, this.error, this.errorKind, this.errorDetail, this.location);
   final String id;
   final bool outgoing;
+  final String peer;
   final String status;
   final String? error;
+  final String? errorKind;
+  final String? errorDetail;
   final String? location;
 }
 
@@ -179,7 +182,9 @@ class AppState extends ChangeNotifier {
       case 'device_status':
         refreshDevices();
       case 'devices_changed':
+        // Pairing and removal also write history entries.
         refreshDevices();
+        refreshHistory();
         _debouncedRefresh(refreshNearby);
       case 'nearby_changed':
         _debouncedRefresh(refreshNearby);
@@ -211,7 +216,7 @@ class AppState extends ChangeNotifier {
       case 'transfer_finished':
         final id = e['transfer_id'] as String;
         transfers.remove(id);
-        _finished.add(FinishedNotice(id, e['direction'] == 'send', e['status'], e['error'], e['location']));
+        _finished.add(FinishedNotice(id, e['direction'] == 'send', e['peer'], e['status'], e['error'], e['error_kind'], e['error_detail'], e['location']));
         refreshHistory();
     }
   }

@@ -28,9 +28,9 @@ JSON datagrams (max 1 KiB) are used only on demand:
   equals `want` replies with an `announce`, and only while "ready to receive" is
   on. The reply goes unicast to the asker and via multicast/broadcast. It is
   rate-limited to one per second per asker.
-* `announce` packets are also sent every 5 s by devices that turned on
-  **Visible on the network** (off by default); `query` without `want` is
-  answered only by visible devices.
+* `announce` packets are sent every 5 s only while the device's **Add device**
+  screen is open (pairing mode, at most 2 minutes per renewal); `query` without
+  `want` is answered only in that state. There is no permanent "visible" mode.
 
 Announcements are hints only and are never trusted for identity.
 
@@ -41,6 +41,14 @@ verified connection in either direction (a transfer, pairing, or the user
 pressing "check connection"). A single timer per contact flips it back. With
 "ready to receive" off, incoming connections and ID queries are ignored, so
 the device looks absent.
+
+When a saved device cannot be reached, the client checks whether something
+answered at its last address (a TLS failure rather than a timeout). If so, it
+pings that address without pinning. If a different key answers there under the
+saved device's name, and that key is not another saved device, the user is told
+the device was probably reinstalled and is offered to pair again. Otherwise the
+device is reported as unreachable. The pinned connection itself is never
+weakened: nothing is sent to the other key.
 
 ## Requests
 

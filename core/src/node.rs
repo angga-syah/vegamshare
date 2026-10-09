@@ -37,7 +37,6 @@ const KEY_NAME: &str = "device_name";
 const KEY_PASSWORD: &str = "password";
 const KEY_DOWNLOAD_DIR: &str = "download_dir";
 const KEY_RECEIVING: &str = "receiving";
-const KEY_VISIBLE: &str = "visible";
 
 /// Opens a host-specific source handle (e.g. an Android content URI).
 pub type ContentOpener = Arc<dyn Fn(&str) -> std::io::Result<std::fs::File> + Send + Sync>;
@@ -83,7 +82,18 @@ pub enum Event {
     OfferClosed { transfer_id: String },
     TransferStarted { transfer: TransferView, resumed: bool },
     TransferProgress { transfer: TransferView, speed_bps: u64 },
-    TransferFinished { transfer_id: String, direction: Direction, peer: Fingerprint, status: TransferStatus, error: Option<String>, location: Option<String> },
+    TransferFinished {
+        transfer_id: String,
+        direction: Direction,
+        peer: Fingerprint,
+        status: TransferStatus,
+        error: Option<String>,
+        /// `Error::code()` of the failure, e.g. "unreachable", "identity_changed".
+        error_kind: Option<String>,
+        /// `Error::detail()`, e.g. the new device ID for "identity_changed".
+        error_detail: Option<String>,
+        location: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -153,6 +163,19 @@ struct PairAttempt {
     conn: quinn::Connection,
     recv: quinn::RecvStream,
     expected_id: String,
+}
+
+/// A failure as reported to the UI.
+pub(crate) struct ErrorInfo {
+    pub kind: &'static str,
+    pub message: String,
+    pub detail: Option<String>,
+}
+
+impl From<&Error> for ErrorInfo {
+    fn from(e: &Error) -> Self {
+        ErrorInfo { kind: e.code(), message: e.to_string(), detail: e.detail() }
+    }
 }
 
 pub(crate) fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -258,11 +281,24 @@ impl Inner {
         }
         // Knock at the last known address first; only if that fails, ask the
         // network where this device ID went (its IP may have changed).
+        let device = self.store.device(fp)?;
+        let last_addr: Option<SocketAddr> = device.as_ref().and_then(|d| d.last_addr.as_deref()).and_then(|a| a.parse().ok());
         let mut tried: Vec<SocketAddr> = Vec::new();
+        // Did *something* answer at the last address (as opposed to silence)?
+        let mut last_addr_answered = false;
         for addr in self.candidates(fp) {
             tried.push(addr);
-            if let Some(conn) = self.try_dial(fp, addr).await {
-                return Ok(conn);
+            match self.dial(addr, Some(*fp)).await {
+                Ok(conn) => {
+                    self.mark_seen(fp, conn.remote_address(), None);
+                    return Ok(conn);
+                }
+                Err(e) => {
+                    tracing::debug!("dial {addr} for {fp:?} failed: {e}");
+                    if Some(addr) == last_addr && !matches!(e, Error::Timeout) {
+                        last_addr_answered = true;
+                    }
+                }
             }
         }
         let device_id = self.store.device(fp)?.map(|d| d.device_id);
@@ -275,7 +311,38 @@ impl Inner {
                 }
             }
         }
+        // Nothing with the pinned key answered. If another VegamShare answers
+        // at the last address, under the same name and not one of our other
+        // devices, the app there was most likely reinstalled. Anything else
+        // (silence, a different device that got the IP) is just unreachable.
+        if last_addr_answered
+            && let (Some(addr), Some(dev)) = (last_addr, device.as_ref())
+            && let Some((info, other)) = self.probe(addr).await
+            && !other.ct_eq(fp)
+            && !self.store.is_trusted(&other)?
+            && info.name.eq_ignore_ascii_case(&dev.name)
+        {
+            return Err(Error::IdentityChanged { name: info.name, device_id: info.device_id });
+        }
         Err(Error::Unreachable)
+    }
+
+    /// Unpinned ping: who is at `addr`? Only used to explain a failure.
+    async fn probe(&self, addr: SocketAddr) -> Option<(PeerInfo, Fingerprint)> {
+        let conn = self.dial(addr, None).await.ok()?;
+        let result = async {
+            let fp = tls::peer_fingerprint(&conn)?;
+            let (mut send, mut recv) = conn.open_bi().await.ok()?;
+            proto::write_frame(&mut send, &Request::Ping { info: self.my_info() }).await.ok()?;
+            let _ = send.finish();
+            match tokio::time::timeout(CONNECT_TIMEOUT, proto::read_frame(&mut recv, MAX_FRAME)).await.ok()?.ok()? {
+                Response::Pong { info, .. } => Some((info.sanitized(), fp)),
+                _ => None,
+            }
+        }
+        .await;
+        conn.close(close::NORMAL.into(), b"");
+        result
     }
 
     async fn try_dial(self: &Arc<Self>, fp: &Fingerprint, addr: SocketAddr) -> Option<quinn::Connection> {
@@ -347,9 +414,13 @@ impl Inner {
     /// Restarts interrupted uploads to a device that just came back.
     async fn auto_resume(self: Arc<Self>, fp: Fingerprint) {
         let Ok(ids) = self.store.outgoing_for_peer(&fp) else { return };
-        let history = self.store.history(10_000).unwrap_or_default();
         for id in ids {
-            let interrupted = history.iter().any(|h| h.transfer_id == id && h.status == TransferStatus::Interrupted.as_str());
+            let interrupted = self
+                .store
+                .history_entry(&id)
+                .ok()
+                .flatten()
+                .is_some_and(|h| h.status == TransferStatus::Interrupted.as_str());
             if interrupted && !lock(&self.transfers).contains_key(&id) {
                 tracing::info!("auto-resuming transfer {id}");
                 if let Err(e) = self.resume_send(&id).await {
@@ -373,6 +444,19 @@ impl Inner {
             paired_at: now,
         };
         self.store.upsert_device(&device)?;
+        let _ = self.store.upsert_history(&HistoryEntry {
+            transfer_id: crate::transfer::new_transfer_id(),
+            direction: "pair".into(),
+            peer_fp: fingerprint,
+            peer_name: device.name.clone(),
+            summary: String::new(),
+            file_count: 0,
+            total_bytes: 0,
+            status: TransferStatus::Completed.as_str().into(),
+            location: None,
+            started_at: now,
+            finished_at: Some(now),
+        });
         self.mark_seen(&fingerprint, addr, None);
         self.emit(Event::DevicesChanged);
         Ok(self.store.device(&fingerprint)?.unwrap_or(device))
@@ -651,6 +735,15 @@ impl Inner {
 
     /// Ends a transfer exactly once: history, journals, event.
     pub(crate) fn finish_transfer(&self, id: &str, direction: Direction, peer: Fingerprint, status: TransferStatus, error: Option<String>) {
+        let error = error.map(|message| ErrorInfo { kind: "internal", message, detail: None });
+        self.finish_transfer_with(id, direction, peer, status, error);
+    }
+
+    pub(crate) fn finish_transfer_with(&self, id: &str, direction: Direction, peer: Fingerprint, status: TransferStatus, error: Option<ErrorInfo>) {
+        let (error_kind, error, error_detail) = match error {
+            Some(e) => (Some(e.kind.to_string()), Some(e.message), e.detail),
+            None => (None, None, None),
+        };
         let active = lock(&self.transfers).remove(id);
         if let Err(e) = self.store.set_history_status(id, status.as_str(), true) {
             tracing::warn!("history update failed: {e}");
@@ -671,15 +764,10 @@ impl Inner {
                 _ => {}
             },
         }
-        let location = self
-            .store
-            .history(10_000)
-            .ok()
-            .and_then(|h| h.into_iter().find(|h| h.transfer_id == id))
-            .and_then(|h| h.location);
+        let location = self.store.history_entry(id).ok().flatten().and_then(|h| h.location);
         tracing::info!("transfer {id} ({}) finished: {}{}", direction.as_str(), status.as_str(), error.as_deref().map(|e| format!(" ({e})")).unwrap_or_default());
         drop(active);
-        self.emit(Event::TransferFinished { transfer_id: id.to_string(), direction, peer, status, error, location });
+        self.emit(Event::TransferFinished { transfer_id: id.to_string(), direction, peer, status, error, error_kind, error_detail, location });
     }
 
     /// Status of a transfer whose connection has closed.
@@ -729,7 +817,6 @@ impl Node {
         };
         let download_dir = store.get_string(KEY_DOWNLOAD_DIR)?.map(PathBuf::from).unwrap_or_else(|| cfg.default_download_dir.clone());
         let receiving = store.get_string(KEY_RECEIVING)?.as_deref() != Some("0");
-        let visible = store.get_string(KEY_VISIBLE)?.as_deref() == Some("1");
 
         let endpoint = make_endpoint(&identity, cfg.port)?;
         let (events, _) = broadcast::channel(1024);
@@ -769,7 +856,6 @@ impl Node {
             let events = inner.events.clone();
             match Discovery::bind(port, me, Box::new(move || drop(events.send(Event::NearbyChanged)))) {
                 Ok(d) => {
-                    d.set_visible(visible);
                     d.set_answering(receiving);
                     d.spawn(inner.shutdown.clone());
                     *inner.discovery.write().unwrap_or_else(|e| e.into_inner()) = Some(d);
@@ -849,20 +935,6 @@ impl Node {
         self.inner.receiving.store(on, std::sync::atomic::Ordering::SeqCst);
         if let Some(d) = self.inner.discovery() {
             d.set_answering(on);
-        }
-        Ok(())
-    }
-
-    /// "Visible on the network": periodic announcements for the nearby list.
-    /// Off by default; pairing by ID works without it.
-    pub fn visible(&self) -> bool {
-        self.inner.discovery().is_some_and(|d| d.visible_setting())
-    }
-
-    pub fn set_visible(&self, on: bool) -> Result<()> {
-        self.inner.store.set_setting(KEY_VISIBLE, if on { b"1" } else { b"0" })?;
-        if let Some(d) = self.inner.discovery() {
-            d.set_visible(on);
         }
         Ok(())
     }
@@ -1110,12 +1182,27 @@ impl Node {
 
 
     pub fn forget_device(&self, fp: &Fingerprint) -> Result<()> {
-        self.inner.store.remove_device(fp)?;
-        lock(&self.inner.presence).remove(fp);
+        let inner = &self.inner;
+        inner.store.remove_device(fp)?;
+        lock(&inner.presence).remove(fp);
         // Drop live connections so the peer cannot keep using one.
-        for t in lock(&self.inner.transfers).values().filter(|t| t.peer == *fp) {
+        for t in lock(&inner.transfers).values().filter(|t| t.peer == *fp) {
             t.request_stop(crate::transfer::StopRequest::Cancel);
             t.conn.close(close::CANCELLED.into(), b"device removed");
+        }
+        // Paused/interrupted transfers with this device can never resume now:
+        // cancel them so they leave the "resumable" list and their partial
+        // files are removed.
+        let active: Vec<String> = lock(&inner.transfers).keys().cloned().collect();
+        for id in inner.store.outgoing_for_peer(fp)? {
+            if !active.contains(&id) {
+                inner.finish_transfer(&id, Direction::Send, *fp, TransferStatus::Cancelled, None);
+            }
+        }
+        for id in inner.store.recv_transfers_for_peer(fp)? {
+            if !active.contains(&id) {
+                inner.finish_transfer(&id, Direction::Receive, *fp, TransferStatus::Cancelled, None);
+            }
         }
         self.inner.emit(Event::DevicesChanged);
         Ok(())

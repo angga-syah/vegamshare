@@ -3,7 +3,7 @@
 ; after:  flutter build windows --release   (in app\)
 
 #define AppName "VegamShare"
-#define AppVersion "0.1.0"
+#define AppVersion "0.1.1"
 #define AppExe "vegamshare.exe"
 #define BuildDir "..\app\build\windows\x64\runner\Release"
 

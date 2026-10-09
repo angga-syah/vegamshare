@@ -315,6 +315,30 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
+    pub fn history_entry(&self, transfer_id: &str) -> Result<Option<HistoryEntry>> {
+        let db = self.db();
+        let mut stmt = db.prepare(
+            "SELECT transfer_id, direction, peer_fp, peer_name, summary, file_count, total_bytes, status, location, started_at, finished_at
+             FROM history WHERE transfer_id = ?1",
+        )?;
+        let mut rows = stmt.query_map([transfer_id], |r| {
+            Ok(HistoryEntry {
+                transfer_id: r.get(0)?,
+                direction: r.get(1)?,
+                peer_fp: fp_from_row(r.get(2)?)?,
+                peer_name: r.get(3)?,
+                summary: r.get(4)?,
+                file_count: r.get::<_, i64>(5)? as u64,
+                total_bytes: r.get::<_, i64>(6)? as u64,
+                status: r.get(7)?,
+                location: r.get(8)?,
+                started_at: r.get(9)?,
+                finished_at: r.get(10)?,
+            })
+        })?;
+        Ok(rows.next().transpose()?)
+    }
+
     pub fn clear_history(&self) -> Result<()> {
         self.db().execute("DELETE FROM history WHERE finished_at IS NOT NULL", [])?;
         Ok(())
@@ -376,6 +400,13 @@ impl Store {
             .query_row("SELECT peer_fp FROM recv_parts WHERE transfer_id = ?1 LIMIT 1", [transfer_id], |r| r.get(0))
             .optional()?;
         Ok(bytes.and_then(|b| Fingerprint::from_slice(&b)))
+    }
+
+    pub fn recv_transfers_for_peer(&self, peer: &Fingerprint) -> Result<Vec<String>> {
+        let db = self.db();
+        let mut stmt = db.prepare("SELECT DISTINCT transfer_id FROM recv_parts WHERE peer_fp = ?1")?;
+        let rows = stmt.query_map([peer.as_bytes().as_slice()], |r| r.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
     pub fn mark_part_done(&self, transfer_id: &str, idx: u32, final_path: &str) -> Result<()> {

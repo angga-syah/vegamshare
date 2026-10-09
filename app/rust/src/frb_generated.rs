@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 590955174;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 985059273;
 
 // Section: executor
 
@@ -1111,41 +1111,6 @@ fn wire__crate__api__vegam__set_receiving_impl(
         },
     )
 }
-fn wire__crate__api__vegam__set_visible_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "set_visible",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_on = <bool>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || {
-                        let output_ok = crate::api::vegam::set_visible(api_on)?;
-                        std::result::Result::Ok(output_ok)
-                    })(),
-                )
-            }
-        },
-    )
-}
 fn wire__crate__api__vegam__shutdown_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1281,6 +1246,7 @@ impl SseDecode for crate::api::vegam::HistoryItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_transferId = <String>::sse_decode(deserializer);
+        let mut var_kind = <String>::sse_decode(deserializer);
         let mut var_outgoing = <bool>::sse_decode(deserializer);
         let mut var_peer = <String>::sse_decode(deserializer);
         let mut var_peerName = <String>::sse_decode(deserializer);
@@ -1293,6 +1259,7 @@ impl SseDecode for crate::api::vegam::HistoryItem {
         let mut var_finishedAt = <Option<i64>>::sse_decode(deserializer);
         return crate::api::vegam::HistoryItem {
             transfer_id: var_transferId,
+            kind: var_kind,
             outgoing: var_outgoing,
             peer: var_peer,
             peer_name: var_peerName,
@@ -1399,7 +1366,6 @@ impl SseDecode for crate::api::vegam::MyInfo {
         let mut var_password = <String>::sse_decode(deserializer);
         let mut var_downloadDir = <String>::sse_decode(deserializer);
         let mut var_receiving = <bool>::sse_decode(deserializer);
-        let mut var_visible = <bool>::sse_decode(deserializer);
         return crate::api::vegam::MyInfo {
             device_id: var_deviceId,
             device_id_formatted: var_deviceIdFormatted,
@@ -1411,7 +1377,6 @@ impl SseDecode for crate::api::vegam::MyInfo {
             password: var_password,
             download_dir: var_downloadDir,
             receiving: var_receiving,
-            visible: var_visible,
         };
     }
 }
@@ -1589,9 +1554,8 @@ fn pde_ffi_dispatcher_primary_impl(
         28 => wire__crate__api__vegam__set_pairing_mode_impl(port, ptr, rust_vec_len, data_len),
         29 => wire__crate__api__vegam__set_password_impl(port, ptr, rust_vec_len, data_len),
         30 => wire__crate__api__vegam__set_receiving_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__vegam__set_visible_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__vegam__shutdown_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__vegam__start_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__vegam__shutdown_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__vegam__start_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1640,6 +1604,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::vegam::HistoryItem {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.transfer_id.into_into_dart().into_dart(),
+            self.kind.into_into_dart().into_dart(),
             self.outgoing.into_into_dart().into_dart(),
             self.peer.into_into_dart().into_dart(),
             self.peer_name.into_into_dart().into_dart(),
@@ -1679,7 +1644,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::vegam::MyInfo {
             self.password.into_into_dart().into_dart(),
             self.download_dir.into_into_dart().into_dart(),
             self.receiving.into_into_dart().into_dart(),
-            self.visible.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1823,6 +1787,7 @@ impl SseEncode for crate::api::vegam::HistoryItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.transfer_id, serializer);
+        <String>::sse_encode(self.kind, serializer);
         <bool>::sse_encode(self.outgoing, serializer);
         <String>::sse_encode(self.peer, serializer);
         <String>::sse_encode(self.peer_name, serializer);
@@ -1916,7 +1881,6 @@ impl SseEncode for crate::api::vegam::MyInfo {
         <String>::sse_encode(self.password, serializer);
         <String>::sse_encode(self.download_dir, serializer);
         <bool>::sse_encode(self.receiving, serializer);
-        <bool>::sse_encode(self.visible, serializer);
     }
 }
 

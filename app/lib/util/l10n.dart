@@ -121,10 +121,16 @@ const Map<String, List<String>> _t = {
   'ready': ['Siap menerima', 'Ready to receive'],
   'ready_on': ['Menunggu ketukan dari perangkat tersimpan. Tidak ada aktivitas sampai ada kiriman.', 'Waiting for saved devices to knock. No activity until something is sent.'],
   'ready_off': ['Tidak menerima. Perangkat ini tidak terlihat dan tidak menjawab siapa pun.', 'Not receiving. This device is invisible and answers no one.'],
-  'visible': ['Terlihat di jaringan', 'Visible on the network'],
-  'visible_sub': [
-    'Umumkan perangkat ini ke semua orang di Wi-Fi yang sama. Tidak perlu untuk pairing (cukup ID + password). Sebaiknya mati.',
-    'Announce this device to everyone on the same Wi-Fi. Not needed for pairing (ID + password is enough). Best left off.'
+  'paired_history': ['Dipasangkan dengan {name}', 'Paired with {name}'],
+  'identity_changed_title': ['Pairing ulang diperlukan', 'Pair again'],
+  'identity_changed_body': [
+    'Di alamat terakhir {name} sekarang ada VegamShare dengan identitas lain (ID {id}). Biasanya karena aplikasinya diinstal ulang. Hapus {name} lalu pairing ulang?',
+    'At the last address of {name} there is now a VegamShare with another identity (ID {id}), usually because the app was reinstalled. Remove {name} and pair again?'
+  ],
+  'pair_again': ['Pairing ulang', 'Pair again'],
+  'unreachable_hint': [
+    '{name} tidak dapat dihubungi. Pastikan aplikasinya terbuka, "Siap menerima" aktif, dan di Wi-Fi yang sama. Kiriman bisa dilanjutkan dari tab Transfer. Kalau {name} baru diinstal ulang, hapus dan pairing ulang.',
+    '{name} cannot be reached. Make sure the app is open, "Ready to receive" is on and it is on the same Wi-Fi. Resume from the Transfers tab. If {name} was reinstalled, remove it and pair again.'
   ],
   'last_seen': ['Terakhir terhubung {time}', 'Last connected {time}'],
   'never_connected': ['Belum pernah terhubung', 'Never connected'],
@@ -159,7 +165,11 @@ const Map<String, List<String>> _t = {
     'Perangkat tidak ditemukan di jaringan. Pastikan terhubung ke Wi-Fi yang sama dan aplikasinya terbuka, atau isi alamat IP.',
     'Device not found on this network. Make sure both are on the same Wi-Fi and the app is open, or enter its IP.'
   ],
-  'e_unreachable': ['Perangkat sedang offline atau tidak dapat dijangkau.', 'The device is offline or unreachable.'],
+  'e_unreachable': [
+    'Tidak dapat dihubungi. Pastikan aplikasinya terbuka, "Siap menerima" aktif, dan di Wi-Fi yang sama. Kalau perangkat itu baru diinstal ulang, hapus lalu pairing ulang.',
+    'Cannot be reached. Make sure the app is open, "Ready to receive" is on and it is on the same Wi-Fi. If the device was reinstalled, remove it and pair again.'
+  ],
+  'e_identity_changed': ['Perangkat ini sudah berganti identitas (kemungkinan diinstal ulang). Pairing ulang diperlukan.', 'This device has a new identity (probably reinstalled). Pair again.'],
   'e_not_trusted': ['Perangkat ini tidak lagi mempercayai Anda. Tambahkan ulang.', 'That device no longer trusts you. Add it again.'],
   'e_identity_mismatch': [
     'Identitas perangkat tidak cocok. Kemungkinan perangkat lain menyamar. Koneksi dibatalkan.',
@@ -183,15 +193,21 @@ String tr(String key, [Map<String, Object> params = const {}]) {
 }
 
 /// Turns a bridge exception ("code|detail") into a friendly message.
-String describeError(Object error) {
+/// Splits a bridge error into (code, detail); null if it has no code.
+(String, String)? errorParts(Object error) {
   var text = error.toString();
   // flutter_rust_bridge wraps anyhow errors in "AnyhowException(...)".
   final m = RegExp(r'AnyhowException\((.*)\)', dotAll: true).firstMatch(text);
   if (m != null) text = m.group(1)!;
   final bar = text.indexOf('|');
-  if (bar < 0) return tr('e_generic', {'detail': text});
-  final code = text.substring(0, bar).trim();
-  final detail = text.substring(bar + 1).split('\n').first.trim();
+  if (bar < 0) return null;
+  return (text.substring(0, bar).trim(), text.substring(bar + 1).split('\n').first.trim());
+}
+
+String describeError(Object error) {
+  final parts = errorParts(error);
+  if (parts == null) return tr('e_generic', {'detail': error.toString()});
+  final (code, detail) = parts;
   switch (code) {
     case 'locked_out':
       return tr('e_locked_out', {'s': detail});
@@ -202,6 +218,7 @@ String describeError(Object error) {
     case 'identity_mismatch':
     case 'rejected':
     case 'pairing_closed':
+    case 'identity_changed':
     case 'invalid_code':
     case 'timeout':
       return tr('e_$code');

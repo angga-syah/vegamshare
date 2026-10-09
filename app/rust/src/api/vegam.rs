@@ -34,32 +34,9 @@ fn node() -> anyhow::Result<&'static Node> {
     NODE.get().ok_or_else(|| anyhow::anyhow!("not_started|service not started"))
 }
 
-fn code(e: &Error) -> &'static str {
-    match e {
-        Error::WrongPassword => "wrong_password",
-        Error::LockedOut(_) => "locked_out",
-        Error::NotFound => "not_found",
-        Error::Unreachable => "unreachable",
-        Error::NotTrusted => "not_trusted",
-        Error::IdentityMismatch => "identity_mismatch",
-        Error::Rejected => "rejected",
-        Error::InvalidArgument(_) => "invalid_argument",
-        Error::InvalidPath(_) => "invalid_path",
-        Error::Timeout => "timeout",
-        Error::Io(_) => "io",
-        Error::UnknownTransfer => "unknown_transfer",
-        Error::PairingClosed => "pairing_closed",
-        Error::InvalidCode => "invalid_code",
-        _ => "internal",
-    }
-}
-
 fn err(e: Error) -> anyhow::Error {
-    let extra = match &e {
-        Error::LockedOut(s) => s.to_string(),
-        _ => e.to_string(),
-    };
-    anyhow::anyhow!("{}|{}", code(&e), extra)
+    let extra = e.detail().unwrap_or_else(|| e.to_string());
+    anyhow::anyhow!("{}|{}", e.code(), extra)
 }
 
 fn fp(s: &str) -> anyhow::Result<Fingerprint> {
@@ -92,7 +69,6 @@ pub struct MyInfo {
     pub password: String,
     pub download_dir: String,
     pub receiving: bool,
-    pub visible: bool,
 }
 
 pub struct Device {
@@ -129,6 +105,8 @@ pub struct Transfer {
 
 pub struct HistoryItem {
     pub transfer_id: String,
+    /// "send", "receive" or "pair".
+    pub kind: String,
     pub outgoing: bool,
     pub peer: String,
     pub peer_name: String,
@@ -168,7 +146,6 @@ fn my_info_dto(n: &Node) -> MyInfo {
         password: n.password(),
         download_dir: n.download_dir().to_string_lossy().into_owned(),
         receiving: n.receiving(),
-        visible: n.visible(),
     }
 }
 
@@ -231,10 +208,6 @@ pub fn set_device_name(name: String) -> anyhow::Result<()> {
 
 pub fn set_receiving(on: bool) -> anyhow::Result<()> {
     node()?.set_receiving(on).map_err(err)
-}
-
-pub fn set_visible(on: bool) -> anyhow::Result<()> {
-    node()?.set_visible(on).map_err(err)
 }
 
 pub fn set_download_dir(dir: String) -> anyhow::Result<()> {
@@ -390,6 +363,7 @@ pub fn history(limit: u32) -> anyhow::Result<Vec<HistoryItem>> {
         .map(|h| HistoryItem {
             transfer_id: h.transfer_id,
             outgoing: h.direction == "send",
+            kind: h.direction,
             peer: h.peer_fp.to_string(),
             peer_name: h.peer_name,
             summary: h.summary,

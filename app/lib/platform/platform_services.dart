@@ -6,6 +6,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:launch_at_startup/launch_at_startup.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:tray_manager/tray_manager.dart' as tm;
 import 'package:window_manager/window_manager.dart';
@@ -105,7 +106,11 @@ Future<void> setBackgroundService(bool on) async {
   if (await FlutterForegroundTask.checkNotificationPermission() != NotificationPermission.granted) {
     await FlutterForegroundTask.requestNotificationPermission();
   }
-  if (!await FlutterForegroundTask.isIgnoringBatteryOptimizations) {
+  // Ask about battery optimisation once; if the user declines, respect it
+  // instead of asking on every launch.
+  final prefs = await SharedPreferences.getInstance();
+  if (!(prefs.getBool('battery_asked') ?? false) && !await FlutterForegroundTask.isIgnoringBatteryOptimizations) {
+    await prefs.setBool('battery_asked', true);
     await FlutterForegroundTask.requestIgnoreBatteryOptimization();
   }
   FlutterForegroundTask.init(

@@ -60,6 +60,18 @@ class HistoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final h = item;
+    if (h.kind == 'pair') {
+      return Card(
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+            child: const Icon(Icons.link),
+          ),
+          title: Text(tr('paired_history', {'name': h.peerName}), maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text(formatTime(h.startedAt)),
+        ),
+      );
+    }
     final where = showPeer ? '${h.outgoing ? tr('to') : tr('from')} ${h.peerName} · ' : '';
     final canOpen = !h.outgoing && h.location != null && h.status == 'completed';
     return Card(

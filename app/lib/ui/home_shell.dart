@@ -126,6 +126,16 @@ class _HomeShellState extends State<HomeShell> {
         text = tr('received_saved', {'path': n.location!});
         action = SnackBarAction(label: tr('open_folder'), onPressed: () => revealPath(n.location!));
       }
+    } else if (n.errorKind == 'identity_changed') {
+      final d = appState.deviceByFingerprint(n.peer);
+      final ctx = _messengerKey.currentContext;
+      if (d != null && ctx != null) {
+        offerPairAgain(ctx, d.fingerprint, d.displayName, tr('identity_changed_body', {'name': d.displayName, 'id': n.errorDetail ?? '?'}));
+      }
+      return;
+    } else if (n.errorKind == 'unreachable') {
+      final d = appState.deviceByFingerprint(n.peer);
+      text = d == null ? tr('e_unreachable') : tr('unreachable_hint', {'name': d.displayName});
     } else {
       text = statusLabel(n.status);
       if (n.error != null && n.status == 'failed') text = '$text: ${n.error}';

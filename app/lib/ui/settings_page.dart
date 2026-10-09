@@ -143,13 +143,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       if (mounted) setState(() => _startup = now);
                     },
                   ),
-                SwitchListTile(
-                  secondary: const Icon(Icons.visibility_outlined),
-                  title: Text(tr('visible')),
-                  subtitle: Text(tr('visible_sub')),
-                  value: info.visible,
-                  onChanged: (v) => _guard(() => core.setVisible(on_: v)),
-                ),
               ]),
             ),
             const SizedBox(height: 8),

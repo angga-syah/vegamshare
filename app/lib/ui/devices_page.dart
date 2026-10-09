@@ -250,6 +250,10 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
       );
       await appState.refreshDevices();
       if (!mounted) return;
+      // The "Add device" page closes itself (and this dialog) as soon as it
+      // sees the new device. Popping again would remove the home screen.
+      final route = ModalRoute.of(context);
+      if (route == null || !route.isActive || !route.isCurrent) return;
       final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
       messenger.showSnackBar(SnackBar(content: Text(tr('paired_ok', {'name': d.displayName})), behavior: SnackBarBehavior.floating));
@@ -298,7 +302,7 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
               TextField(
                 controller: _ip,
                 keyboardType: TextInputType.url,
-                decoration: InputDecoration(labelText: tr('ip_optional'), helperText: tr('ip_help'), prefixIcon: const Icon(Icons.lan)),
+                decoration: InputDecoration(labelText: tr('ip_optional'), helperText: tr('ip_help'), helperMaxLines: 3, prefixIcon: const Icon(Icons.lan)),
               ),
             ] else
               Align(

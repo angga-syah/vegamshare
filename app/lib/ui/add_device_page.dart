@@ -24,6 +24,7 @@ class AddDevicePage extends StatefulWidget {
 class _AddDevicePageState extends State<AddDevicePage> {
   Timer? _keepOpen;
   int _devicesAtStart = 0;
+  bool _closing = false;
 
   @override
   void initState() {
@@ -46,7 +47,9 @@ class _AddDevicePageState extends State<AddDevicePage> {
   /// The other side may complete pairing (QR scan, accepted request) while
   /// we just watch; leave as soon as a device was added.
   void _closeWhenPaired() {
+    if (_closing) return;
     if (appState.devices.length > _devicesAtStart && mounted) {
+      _closing = true;
       final newest = appState.devices.last;
       final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).popUntil((r) => r.isFirst);

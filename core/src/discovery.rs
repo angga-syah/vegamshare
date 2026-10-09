@@ -87,8 +87,6 @@ pub(crate) struct Discovery {
     replied: Mutex<HashMap<IpAddr, Instant>>,
     joined: Mutex<HashSet<Ipv4Addr>>,
     on_change: Box<dyn Fn() + Send + Sync>,
-    /// Announce periodically and answer anonymous queries.
-    visible: AtomicBool,
     /// Answer queries for our own ID (off while not receiving).
     answering: AtomicBool,
     /// Temporarily visible while the "Add device" screen is open.
@@ -132,7 +130,6 @@ impl Discovery {
             replied: Mutex::new(HashMap::new()),
             joined: Mutex::new(HashSet::new()),
             on_change,
-            visible: AtomicBool::new(false),
             answering: AtomicBool::new(true),
             temp_visible: AtomicBool::new(false),
             wake: tokio::sync::Notify::new(),
@@ -174,28 +171,20 @@ impl Discovery {
         });
     }
 
-    pub(crate) fn set_visible(&self, on: bool) {
-        self.visible.store(on, Ordering::SeqCst);
-        self.wake.notify_one();
-        if !on {
-            self.seen.lock().unwrap_or_else(|e| e.into_inner()).clear();
-            (self.on_change)();
-        }
-    }
-
+    /// Visible only while the "Add device" screen is open.
     pub(crate) fn is_visible(&self) -> bool {
-        self.visible.load(Ordering::SeqCst) || self.temp_visible.load(Ordering::SeqCst)
-    }
-
-    /// The persistent "visible" setting, ignoring pairing mode.
-    pub(crate) fn visible_setting(&self) -> bool {
-        self.visible.load(Ordering::SeqCst)
+        self.temp_visible.load(Ordering::SeqCst)
     }
 
     pub(crate) fn set_temp_visible(self: &Arc<Self>, on: bool) {
         let was = self.temp_visible.swap(on, Ordering::SeqCst);
         if was != on {
             self.wake.notify_one();
+        }
+        if !on && was {
+            // Leaving the screen: forget who we saw, it goes stale anyway.
+            self.seen.lock().unwrap_or_else(|e| e.into_inner()).clear();
+            (self.on_change)();
         }
         if on && !was {
             // Ask everyone visible to introduce themselves right away.

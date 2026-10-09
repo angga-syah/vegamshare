@@ -21,9 +21,9 @@
 
 * **Discovery is silent by default.** A device never announces itself. It only
   answers a query naming its exact 9-digit ID, which a stranger would have to
-  know already, and they would still need the password. The answer, and any
-  "Visible on the network" announcements (opt-in), are plaintext: they reveal
-  name, ID and IP to others on the same Wi-Fi.
+  know already, and they would still need the password. The answer, and the
+  announcements sent while the "Add device" screen is open, are plaintext: they
+  reveal name, ID and IP to others on the same Wi-Fi.
 * **"Online" status can be spoofed** by forged announcements. This is cosmetic
   only: a forged device fails the pinned handshake, so nothing is sent to it.
 * **The password is stored reversibly.** Symmetric SPAKE2 needs it on the

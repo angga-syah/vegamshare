@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `code`, `device_dto`, `device_of`, `err`, `fp`, `my_info_dto`, `node`, `on_rt`, `rt`
+// These functions are ignored because they are not marked as `pub`: `device_dto`, `device_of`, `err`, `fp`, `my_info_dto`, `node`, `on_rt`, `rt`
 
 /// Starts the background service once; later calls return the same info.
 Future<MyInfo> start({required StartConfig config}) =>
@@ -29,9 +29,6 @@ Future<void> setDeviceName({required String name}) =>
 
 Future<void> setReceiving({required bool on_}) =>
     RustLib.instance.api.crateApiVegamSetReceiving(on_: on_);
-
-Future<void> setVisible({required bool on_}) =>
-    RustLib.instance.api.crateApiVegamSetVisible(on_: on_);
 
 Future<void> setDownloadDir({required String dir}) =>
     RustLib.instance.api.crateApiVegamSetDownloadDir(dir: dir);
@@ -187,6 +184,9 @@ class Device {
 
 class HistoryItem {
   final String transferId;
+
+  /// "send", "receive" or "pair".
+  final String kind;
   final bool outgoing;
   final String peer;
   final String peerName;
@@ -200,6 +200,7 @@ class HistoryItem {
 
   const HistoryItem({
     required this.transferId,
+    required this.kind,
     required this.outgoing,
     required this.peer,
     required this.peerName,
@@ -215,6 +216,7 @@ class HistoryItem {
   @override
   int get hashCode =>
       transferId.hashCode ^
+      kind.hashCode ^
       outgoing.hashCode ^
       peer.hashCode ^
       peerName.hashCode ^
@@ -232,6 +234,7 @@ class HistoryItem {
       other is HistoryItem &&
           runtimeType == other.runtimeType &&
           transferId == other.transferId &&
+          kind == other.kind &&
           outgoing == other.outgoing &&
           peer == other.peer &&
           peerName == other.peerName &&
@@ -255,7 +258,6 @@ class MyInfo {
   final String password;
   final String downloadDir;
   final bool receiving;
-  final bool visible;
 
   const MyInfo({
     required this.deviceId,
@@ -268,7 +270,6 @@ class MyInfo {
     required this.password,
     required this.downloadDir,
     required this.receiving,
-    required this.visible,
   });
 
   @override
@@ -282,8 +283,7 @@ class MyInfo {
       addresses.hashCode ^
       password.hashCode ^
       downloadDir.hashCode ^
-      receiving.hashCode ^
-      visible.hashCode;
+      receiving.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -299,8 +299,7 @@ class MyInfo {
           addresses == other.addresses &&
           password == other.password &&
           downloadDir == other.downloadDir &&
-          receiving == other.receiving &&
-          visible == other.visible;
+          receiving == other.receiving;
 }
 
 class Nearby {

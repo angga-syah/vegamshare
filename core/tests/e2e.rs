@@ -8,6 +8,12 @@ use tokio::sync::broadcast::Receiver;
 
 const WAIT: Duration = Duration::from_secs(120);
 
+/// Test folders live under target/tmp: nodes still running in background
+/// tasks keep SQLite files open, so Windows cannot always delete them.
+fn tmpdir() -> tempfile::TempDir {
+    tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap()
+}
+
 struct TestNode {
     node: Node,
     root: PathBuf,
@@ -101,7 +107,7 @@ fn walk(root: &Path) -> Vec<(String, Option<blake3::Hash>)> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn pair_once_then_send_folders_both_ways() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let a = TestNode::start(&tmp.path().join("a"), "Laptop A").await;
     let b = TestNode::start(&tmp.path().join("b"), "Phone B").await;
     pair(&a, &b).await;
@@ -141,7 +147,9 @@ async fn pair_once_then_send_folders_both_ways() {
     assert_same_tree(&src, &a.downloads().join("Proyek (1)"));
 
     let h = a.node.history(10).unwrap();
-    assert_eq!(h.len(), 3);
+    let transfers: Vec<_> = h.iter().filter(|e| e.direction != "pair").collect();
+    assert_eq!(transfers.len(), 3, "{h:?}");
+    assert_eq!(h.iter().filter(|e| e.direction == "pair").count(), 1, "{h:?}");
     assert!(h.iter().all(|e| e.status == "completed"), "{h:?}");
     // No temporary files left behind.
     assert!(walk(&a.downloads()).iter().all(|(p, _)| !p.ends_with(".vegamshare-part")));
@@ -149,7 +157,7 @@ async fn pair_once_then_send_folders_both_ways() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn many_small_files() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let a = TestNode::start(&tmp.path().join("a"), "A").await;
     let b = TestNode::start(&tmp.path().join("b"), "B").await;
     pair(&a, &b).await;
@@ -170,7 +178,7 @@ async fn many_small_files() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn wrong_password_is_rejected_and_rate_limited() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let a = TestNode::start(&tmp.path().join("a"), "A").await;
     let b = TestNode::start(&tmp.path().join("b"), "B").await;
 
@@ -187,7 +195,7 @@ async fn wrong_password_is_rejected_and_rate_limited() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn pairing_checks_the_device_id() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let a = TestNode::start(&tmp.path().join("a"), "A").await;
     let b = TestNode::start(&tmp.path().join("b"), "B").await;
     let wrong_id = if a.id() == "123456789" { "987654321" } else { "123456789" };
@@ -198,7 +206,7 @@ async fn pairing_checks_the_device_id() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn impostor_at_known_address_is_not_trusted() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let a = TestNode::start(&tmp.path().join("a"), "A").await;
     let b = TestNode::start(&tmp.path().join("b"), "B").await;
     pair(&a, &b).await;
@@ -215,20 +223,24 @@ async fn impostor_at_known_address_is_not_trusted() {
     let evil = Node::start(cfg).await.unwrap();
     assert_eq!(evil.local_addr().unwrap().port(), port);
 
-    // B must refuse to talk to it as A.
-    assert!(b.node.ping(&fp_a).await.is_err());
+    // B must refuse to talk to it as A. It is reported as "identity
+    // changed" (indistinguishable from a reinstall); the only way forward
+    // is a fresh pairing, which the impostor cannot pass without the code,
+    // QR or password.
+    assert!(matches!(b.node.ping(&fp_a).await, Err(Error::IdentityChanged { .. })));
     let f = tmp.path().join("secret.txt");
     std::fs::write(&f, b"rahasia").unwrap();
     let mut rx = b.node.subscribe();
     let id = b.node.send_paths(&fp_a, vec![f]).await.unwrap();
     let (status, _) = wait_finished(&mut rx, &id).await;
-    assert_eq!(status, TransferStatus::Interrupted);
+    assert_eq!(status, TransferStatus::Failed);
     assert!(!tmp.path().join("evil/dl/secret.txt").exists());
+    assert!(evil.devices().unwrap().is_empty(), "the impostor trusts nobody");
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn forgotten_device_cannot_send() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let a = TestNode::start(&tmp.path().join("a"), "A").await;
     let b = TestNode::start(&tmp.path().join("b"), "B").await;
     pair(&a, &b).await;
@@ -246,7 +258,7 @@ async fn forgotten_device_cannot_send() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn receiver_can_decline() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let a = TestNode::start(&tmp.path().join("a"), "A").await;
     let b = TestNode::start(&tmp.path().join("b"), "B").await;
     pair(&a, &b).await;
@@ -277,7 +289,7 @@ async fn receiver_can_decline() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn pause_restart_and_resume() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let a_root = tmp.path().join("a");
     let a = TestNode::start(&a_root, "A").await;
     let b = TestNode::start(&tmp.path().join("b"), "B").await;
@@ -343,7 +355,7 @@ async fn start_with_discovery(root: &Path, name: &str, discovery_port: u16) -> T
 
 #[tokio::test(flavor = "multi_thread")]
 async fn pair_by_id_while_silent_and_find_after_address_change() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let port = 47971;
     let a_root = tmp.path().join("a");
     let a = start_with_discovery(&a_root, "A", port).await;
@@ -373,7 +385,7 @@ async fn pair_by_id_while_silent_and_find_after_address_change() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn not_receiving_means_absent() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let port = 47972;
     let a = start_with_discovery(&tmp.path().join("a"), "A", port).await;
     let b = start_with_discovery(&tmp.path().join("b"), "B", port).await;
@@ -391,22 +403,95 @@ async fn not_receiving_means_absent() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn visible_mode_lists_device() {
-    let tmp = tempfile::tempdir().unwrap();
+async fn visible_only_while_add_device_is_open() {
+    let tmp = tmpdir();
     let port = 47973;
     let a = start_with_discovery(&tmp.path().join("a"), "A", port).await;
     let b = start_with_discovery(&tmp.path().join("b"), "B", port).await;
-    a.node.set_visible(true).unwrap();
-    let listed = tokio::time::timeout(Duration::from_secs(15), async {
-        loop {
-            if b.node.nearby().unwrap().iter().any(|n| n.device_id == a.id()) {
-                return;
-            }
+    let listed = |b: &TestNode, id: &str| b.node.nearby().unwrap().iter().any(|n| n.device_id == id);
+
+    a.node.set_pairing_mode(true);
+    b.node.set_pairing_mode(true); // B's screen asks everyone visible to introduce themselves
+    let seen = tokio::time::timeout(Duration::from_secs(15), async {
+        while !listed(&b, &a.id()) {
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
     })
     .await;
-    assert!(listed.is_ok(), "visible device should appear in the nearby list");
+    assert!(seen.is_ok(), "A should appear while its Add device screen is open");
+
+    // Leaving the screen makes A silent again; B forgets it within the expiry.
+    a.node.set_pairing_mode(false);
+    b.node.set_pairing_mode(false);
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    b.node.set_pairing_mode(true);
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert!(!listed(&b, &a.id()), "A must not be listed after closing its screen");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pairing_is_recorded_in_history() {
+    let tmp = tmpdir();
+    let a = TestNode::start(&tmp.path().join("a"), "A").await;
+    let b = TestNode::start(&tmp.path().join("b"), "B").await;
+    pair(&a, &b).await;
+    for (node, other) in [(&a, "B"), (&b, "A")] {
+        let h = node.node.history(10).unwrap();
+        assert!(h.iter().any(|e| e.direction == "pair" && e.peer_name == other && e.status == "completed"), "{h:?}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reinstalled_device_is_reported_not_just_offline() {
+    let tmp = tmpdir();
+    let a = TestNode::start(&tmp.path().join("a"), "A").await;
+    let b = TestNode::start(&tmp.path().join("b"), "Phone").await;
+    pair(&a, &b).await;
+    let fp_b = b.node.fingerprint();
+    let port = b.node.local_addr().unwrap().port();
+
+    // The phone's app is reinstalled: same address, brand-new identity.
+    b.node.shutdown().await;
+    drop(b);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let mut cfg = Config::new(tmp.path().join("b2/data"), tmp.path().join("b2/dl"), "Phone", "test");
+    cfg.port = port;
+    cfg.discovery_port = None;
+    let reinstalled = Node::start(cfg).await.unwrap();
+    let new_id = reinstalled.my_info().device_id;
+
+    match a.node.ping(&fp_b).await {
+        Err(Error::IdentityChanged { device_id, name }) => {
+            assert_eq!(device_id, new_id);
+            assert_eq!(name, "Phone");
+        }
+        other => panic!("expected IdentityChanged, got {other:?}"),
+    }
+
+    // A send fails for good (nothing to resume) and says why.
+    let f = tmp.path().join("x.txt");
+    std::fs::write(&f, b"x").unwrap();
+    let mut rx = a.node.subscribe();
+    let id = a.node.send_paths(&fp_b, vec![f]).await.unwrap();
+    let kind = tokio::time::timeout(WAIT, async {
+        loop {
+            if let Ok(Event::TransferFinished { transfer_id, status, error_kind, .. }) = rx.recv().await
+                && transfer_id == id
+            {
+                return (status, error_kind);
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(kind, (TransferStatus::Failed, Some("identity_changed".to_string())));
+    assert!(!tmp.path().join("b2/dl/x.txt").exists(), "nothing is sent to the new identity");
+
+    // Truly offline (nobody at the address) stays a plain "unreachable".
+    reinstalled.shutdown().await;
+    drop(reinstalled);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(matches!(a.node.ping(&fp_b).await, Err(Error::Unreachable)));
 }
 
 // ---- password-free pairing ----------------------------------------------
@@ -425,7 +510,7 @@ async fn next_pair_request(rx: &mut Receiver<Event>) -> (String, String) {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn tap_to_pair_with_matching_code() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let a = TestNode::start(&tmp.path().join("a"), "A").await;
     let b = TestNode::start(&tmp.path().join("b"), "B").await;
     a.node.set_pairing_mode(true);
@@ -450,7 +535,7 @@ async fn tap_to_pair_with_matching_code() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn tap_to_pair_declined_or_closed() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let a = TestNode::start(&tmp.path().join("a"), "A").await;
     let b = TestNode::start(&tmp.path().join("b"), "B").await;
 
@@ -472,7 +557,7 @@ async fn tap_to_pair_declined_or_closed() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn qr_pairing_is_single_use_and_pinned() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = tmpdir();
     let a = TestNode::start(&tmp.path().join("a"), "A").await;
     let b = TestNode::start(&tmp.path().join("b"), "B").await;
     let c = TestNode::start(&tmp.path().join("c"), "C").await;
@@ -491,4 +576,62 @@ async fn qr_pairing_is_single_use_and_pinned() {
     let r = b.node.pair_with_qr(&forged).await;
     assert!(r.is_err(), "{r:?}");
     assert_eq!(a.node.devices().unwrap().len(), 1, "C never got trusted");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn another_device_at_the_old_address_is_not_a_reinstall() {
+    let tmp = tmpdir();
+    let a = TestNode::start(&tmp.path().join("a"), "A").await;
+    let b = TestNode::start(&tmp.path().join("b"), "Phone").await;
+    let c = TestNode::start(&tmp.path().join("c"), "Laptop").await;
+    pair(&a, &b).await;
+    let fp_b = b.node.fingerprint();
+    let port = b.node.local_addr().unwrap().port();
+    b.node.shutdown().await;
+    drop(b);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // Someone else with a different name now sits at B's old address.
+    let mut cfg = Config::new(tmp.path().join("x/data"), tmp.path().join("x/dl"), "Tablet Tetangga", "test");
+    cfg.port = port;
+    cfg.discovery_port = None;
+    let stranger = Node::start(cfg).await.unwrap();
+    assert!(matches!(a.node.ping(&fp_b).await, Err(Error::Unreachable)), "different name: just unreachable");
+    stranger.shutdown().await;
+    drop(stranger);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    // One of A's own paired devices got that address (same name even).
+    let mut cfg = Config::new(tmp.path().join("y/data"), tmp.path().join("y/dl"), "Phone", "test");
+    cfg.port = port;
+    cfg.discovery_port = None;
+    let other = Node::start(cfg).await.unwrap();
+    other.pair(&a.id(), Some(&a.addr()), &a.node.password()).await.unwrap();
+    let r = a.node.ping(&fp_b).await;
+    assert!(matches!(r, Err(Error::Unreachable)), "a paired device is never a reinstall: {r:?}");
+    drop(c);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn forgetting_a_device_cancels_its_unfinished_transfers() {
+    let tmp = tmpdir();
+    let a = TestNode::start(&tmp.path().join("a"), "A").await;
+    let b = TestNode::start(&tmp.path().join("b"), "B").await;
+    pair(&a, &b).await;
+    let fp_b = b.node.fingerprint();
+    b.node.shutdown().await;
+    drop(b);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let f = tmp.path().join("nanti.txt");
+    std::fs::write(&f, b"later").unwrap();
+    let mut rx = a.node.subscribe();
+    let id = a.node.send_paths(&fp_b, vec![f]).await.unwrap();
+    assert_eq!(wait_finished(&mut rx, &id).await.0, TransferStatus::Interrupted);
+
+    a.node.forget_device(&fp_b).unwrap();
+    let h = a.node.history(10).unwrap();
+    let entry = h.iter().find(|e| e.transfer_id == id).unwrap();
+    assert_eq!(entry.status, "cancelled", "no longer offered as resumable");
+    assert!(matches!(a.node.resume(&id).await, Err(Error::UnknownTransfer)));
 }

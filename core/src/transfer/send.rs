@@ -85,9 +85,9 @@ impl Inner {
         let id = offer.transfer_id.clone();
         let (status, error) = match self.send_inner(peer, offer, sources, resumed).await {
             Ok(s) => (s, None),
-            Err((s, e)) => (s, Some(e.to_string())),
+            Err((s, e)) => (s, Some(crate::node::ErrorInfo::from(&e))),
         };
-        self.finish_transfer(&id, Direction::Send, peer, status, error);
+        self.finish_transfer_with(&id, Direction::Send, peer, status, error);
     }
 
     async fn send_inner(
@@ -97,8 +97,11 @@ impl Inner {
         sources: Vec<Source>,
         resumed: bool,
     ) -> std::result::Result<TransferStatus, (TransferStatus, Error)> {
-        let interrupted = |e: Error| (TransferStatus::Interrupted, e);
-        let conn = self.connect_trusted(&peer).await.map_err(interrupted)?;
+        let conn = self.connect_trusted(&peer).await.map_err(|e| match e {
+            // The saved device no longer exists as such: nothing to resume.
+            e @ Error::IdentityChanged { .. } => (TransferStatus::Failed, e),
+            e => (TransferStatus::Interrupted, e),
+        })?;
 
         let offsets = match self.offer(&conn, &offer).await {
             Ok(o) => o,
@@ -189,7 +192,7 @@ impl Inner {
             }
             failure => match Inner::status_after_close(&t) {
                 s @ (TransferStatus::Paused | TransferStatus::Cancelled | TransferStatus::Rejected) => Ok(s),
-                s => Err((s, failure.unwrap_or(Error::Unreachable))),
+                s => Err((s, failure.unwrap_or(Error::ConnectionLost))),
             },
         }
     }
