@@ -30,6 +30,10 @@ Future<void> setDeviceName({required String name}) =>
 Future<void> setReceiving({required bool on_}) =>
     RustLib.instance.api.crateApiVegamSetReceiving(on_: on_);
 
+/// Call after the OS default network changed (joined/left a hotspot).
+Future<void> rebindNetwork() =>
+    RustLib.instance.api.crateApiVegamRebindNetwork();
+
 Future<void> setDownloadDir({required String dir}) =>
     RustLib.instance.api.crateApiVegamSetDownloadDir(dir: dir);
 

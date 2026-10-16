@@ -38,6 +38,22 @@ const REPLY_MIN_INTERVAL: Duration = Duration::from_secs(1);
 const MAX_PACKET: usize = 1024;
 const MAX_TRACKED: usize = 256;
 
+#[cfg(test)]
+mod rank_tests {
+    use super::*;
+
+    #[test]
+    fn hotspot_and_lan_addresses_come_first() {
+        let mut v: Vec<Ipv4Addr> = ["192.0.0.4", "10.12.3.4", "169.254.1.2", "100.70.1.1", "192.168.43.1", "172.20.0.5", "8.8.8.8"]
+            .iter()
+            .map(|s| s.parse().unwrap())
+            .collect();
+        v.sort_by_key(|ip| address_rank(*ip));
+        let s: Vec<String> = v.iter().map(|i| i.to_string()).collect();
+        assert_eq!(s, ["192.168.43.1", "172.20.0.5", "10.12.3.4", "8.8.8.8", "100.70.1.1", "169.254.1.2", "192.0.0.4"]);
+    }
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum Kind {
@@ -95,15 +111,36 @@ pub(crate) struct Discovery {
     wake: tokio::sync::Notify,
 }
 
+/// IPv4 interfaces, routable LAN addresses first. Link-local addresses
+/// (169.254.x.x) come last: they are what two computers joined by a plain
+/// network cable get, but Windows also keeps them on idle adapters.
 fn local_ipv4() -> Vec<if_addrs::Ifv4Addr> {
-    if_addrs::get_if_addrs()
+    let mut v: Vec<if_addrs::Ifv4Addr> = if_addrs::get_if_addrs()
         .unwrap_or_default()
         .into_iter()
         .filter_map(|i| match i.addr {
-            if_addrs::IfAddr::V4(a) if !a.ip.is_loopback() && !a.ip.is_link_local() => Some(a),
+            if_addrs::IfAddr::V4(a) if !a.ip.is_loopback() && !a.ip.is_unspecified() => Some(a),
             _ => None,
         })
-        .collect()
+        .collect();
+    v.sort_by_key(|a| address_rank(a.ip));
+    v
+}
+
+/// Lower is better. Home routers and Android hotspots use 192.168.x.x;
+/// 10.x and 100.64/10 are typical of mobile data; 192.0.0.x is the 464XLAT
+/// shim on phones; link-local only matters for a direct cable.
+fn address_rank(ip: Ipv4Addr) -> u8 {
+    let o = ip.octets();
+    match o {
+        [192, 0, 0, _] => 6,
+        [192, 168, ..] => 0,
+        [172, b, ..] if (16..32).contains(&b) => 1,
+        [10, ..] => 2,
+        [100, b, ..] if (64..128).contains(&b) => 4,
+        [169, 254, ..] => 5,
+        _ => 3,
+    }
 }
 
 /// Addresses of this machine on the LAN, for display ("connect by IP").

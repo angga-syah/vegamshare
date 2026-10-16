@@ -23,7 +23,7 @@ const SAS_LABEL: &[u8] = b"EXPORTER-vegamshare-sas";
 pub(crate) const QR_TTL: Duration = Duration::from_secs(120);
 const QR_SCHEME: &str = "vegamshare://pair";
 const MAX_TOKENS: usize = 4;
-const MAX_QR_ADDRS: usize = 6;
+pub(crate) const MAX_QR_ADDRS: usize = 6;
 
 /// Six-digit code both sides display, e.g. "482915".
 pub(crate) fn sas_code(conn: &quinn::Connection) -> Result<String> {

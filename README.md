@@ -17,6 +17,9 @@ Windows installer (`.exe`) and Android app (`.apk`).
   the device ID and password (optionally with an IP address).
 - **Resumes interrupted transfers:** if Wi-Fi drops, the transfer continues where it stopped. Every file
   is checked end to end with BLAKE3.
+- **No Wi-Fi needed:** an Android phone can create a temporary hotspot (no internet, no mobile data
+  used); the other phone scans the QR code and joins it automatically. A direct LAN cable between two
+  PCs works too.
 - **Encrypted:** QUIC / TLS 1.3. Devices verify each other's keys, and no data ever leaves your network.
 - **Battery friendly:** completely idle until you send something. It does no background scanning and
   makes no announcements on the network.
@@ -25,13 +28,15 @@ Windows installer (`.exe`) and Android app (`.apk`).
 
 ## How to use
 
-1. Install VegamShare on both devices and connect them to the same Wi-Fi, LAN or hotspot.
+1. Install VegamShare on both devices and connect them to the same Wi-Fi, LAN or hotspot. No Wi-Fi?
+   On an Android phone tap **Add → No Wi-Fi? Create a hotspot** and scan its QR code from the other
+   phone; a laptop connects to the hotspot shown there.
 2. On both devices tap **Add**. The other device appears in the list: tap it and confirm that the same
    6-digit code shows on both screens. You can also scan a QR code or use ID + password.
 3. Done. From now on, pick the saved device and send files or folders.
 
 On Windows, keep your Wi-Fi network profile set to **Private**; the installer opens the firewall for
-private networks only. On Android, allow *all files access* (to send folders and save received files to
+private networks only, and the app warns when the current network is Public. On Android, allow *all files access* (to send folders and save received files to
 `Download/VegamShare`) and notifications (to stay ready in the background).
 
 The Windows installer is not code-signed yet, so SmartScreen may warn on first run: choose
@@ -74,7 +79,7 @@ Build notes:
   AGP 9 built-in Kotlin, which the Flutter template disables.
 - Release APKs refuse to build without a signing key. For a local test build only:
   `flutter build apk --release -Pvegamshare.debugSigning=true`.
-- Bump `version` in `app/pubspec.yaml` (e.g. `0.1.1+2`) for every build you share, so installed
+- Bump `version` in `app/pubspec.yaml` (e.g. `0.2.0+3`) for every build you share, so installed
   versions can be told apart and Android refuses to downgrade.
 
 ### Signing key (once)

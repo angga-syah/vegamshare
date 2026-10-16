@@ -6,10 +6,12 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../main.dart' show appState;
+import '../platform/platform_services.dart';
 import '../src/rust/api/vegam.dart' as core;
 import '../util/l10n.dart';
 import 'common.dart';
 import 'devices_page.dart' show AddDeviceDialog;
+import 'hotspot_page.dart';
 
 /// "Add device": every way to pair, best first. While this screen is open
 /// the device is visible to others and accepts code-confirmed requests;
@@ -30,9 +32,8 @@ class _AddDevicePageState extends State<AddDevicePage> {
   void initState() {
     super.initState();
     _devicesAtStart = appState.devices.length;
-    core.setPairingMode(on_: true);
-    // Pairing mode lasts two minutes per call; renew while the screen is open.
-    _keepOpen = Timer.periodic(const Duration(seconds: 90), (_) => core.setPairingMode(on_: true));
+    pairingScreenOpened();
+    _keepOpen = Timer.periodic(const Duration(seconds: 90), (_) => pairingScreenRenew());
     appState.addListener(_closeWhenPaired);
   }
 
@@ -40,7 +41,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
   void dispose() {
     _keepOpen?.cancel();
     appState.removeListener(_closeWhenPaired);
-    core.setPairingMode(on_: false);
+    pairingScreenClosed();
     super.dispose();
   }
 
@@ -62,21 +63,83 @@ class _AddDevicePageState extends State<AddDevicePage> {
   }
 
   Future<void> _scan() async {
-    final scanned = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const _ScanPage()));
+    var scanned = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const _ScanPage()));
     if (scanned == null || !mounted) return;
+    final status = ValueNotifier<String>(tr('pairing_progress'));
+    BuildContext? dialog;
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const AlertDialog(content: Row(children: [CircularProgressIndicator(), SizedBox(width: 20), Expanded(child: Text('…'))])),
+      builder: (ctx) {
+        dialog = ctx;
+        return AlertDialog(
+          content: Row(children: [
+            const CircularProgressIndicator(),
+            const SizedBox(width: 20),
+            Expanded(child: ValueListenableBuilder(valueListenable: status, builder: (_, v, _) => Text(v))),
+          ]),
+        );
+      },
     );
+    void closeDialog() {
+      final d = dialog;
+      if (d != null && d.mounted) Navigator.of(d).pop();
+      dialog = null;
+    }
+
     try {
-      await core.pairWithQr(scanned: scanned);
-      await appState.refreshDevices();
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        showSnack(context, describeError(e));
+      final q = Uri.parse(scanned).queryParameters;
+      final ssid = q['ws'];
+      final pass = q['wp'];
+      if (ssid != null && pass != null) {
+        status.value = tr('joining_hotspot', {'name': ssid});
+        final gateway = await joinWifi(ssid, pass, q['wt'] == '3');
+        await core.rebindNetwork();
+        // On a hotspot the gateway is the phone that created it: try it
+        // first, whatever addresses the QR listed.
+        if (gateway != null) {
+          final port = (q['a'] ?? '').split(',').first.split(':').last;
+          final p = int.tryParse(port) ?? 47901;
+          scanned = scanned.replaceFirst('&a=', '&a=$gateway:$p,');
+        }
+        appState.setJoined(ssid);
+        final known = appState.deviceByFingerprint(q['fp'] ?? '');
+        if (known != null) {
+          // Already paired: joining the network was all that was needed.
+          closeDialog();
+          if (mounted) {
+            final messenger = ScaffoldMessenger.of(context);
+            Navigator.of(context).pop();
+            messenger.showSnackBar(
+                SnackBar(content: Text(tr('joined_ready', {'name': known.displayName})), behavior: SnackBarBehavior.floating));
+          }
+          return;
+        }
       }
+      status.value = tr('pairing_progress');
+      // Right after joining, the host may need a moment to be reachable.
+      for (var attempt = 0;; attempt++) {
+        try {
+          await core.pairWithQr(scanned: scanned);
+          break;
+        } catch (e) {
+          if (ssid != null && attempt < 3 && errorParts(e)?.$1 == 'unreachable') {
+            await Future<void>.delayed(const Duration(seconds: 2));
+            continue;
+          }
+          rethrow;
+        }
+      }
+      await appState.refreshDevices(); // the page closes itself on success
+    } on WifiLinkException catch (e) {
+      closeDialog();
+      if (mounted) showSnack(context, describeWifiError(e.code));
+    } catch (e) {
+      closeDialog();
+      if (mounted) showSnack(context, describeError(e));
+    } finally {
+      // The dialog may still be on screen until the next frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) => status.dispose());
     }
   }
 
@@ -111,6 +174,25 @@ class _AddDevicePageState extends State<AddDevicePage> {
                   subtitle: Text('ID ${n.deviceId}'),
                   trailing: FilledButton.tonal(onPressed: () => _pairNearby(n), child: Text(tr('connect'))),
                   onTap: () => _pairNearby(n),
+                ),
+              ),
+            if (Platform.isAndroid)
+              Card(
+                color: theme.colorScheme.tertiaryContainer,
+                child: ListTile(
+                  leading: const Icon(Icons.wifi_tethering),
+                  title: Text(tr('no_wifi_title')),
+                  subtitle: Text(tr('no_wifi_sub')),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HotspotPage())),
+                ),
+              ),
+            if (Platform.isWindows)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.wifi_off),
+                  title: Text(tr('no_wifi_title')),
+                  subtitle: Text(tr('no_wifi_windows')),
                 ),
               ),
             SectionHeader(tr('other_ways')),

@@ -69,6 +69,25 @@ Future<List<String>> pickFolder(BuildContext context) async {
   return d == null ? [] : [d];
 }
 
+/// Pairing mode stays on while at least one screen needs it (Add device,
+/// hotspot); screens stack, so a plain on/off would switch it off too early.
+int _pairingScreens = 0;
+
+void pairingScreenOpened() {
+  _pairingScreens++;
+  core.setPairingMode(on_: true);
+}
+
+/// Pairing mode lasts two minutes per call; screens renew it while open.
+void pairingScreenRenew() {
+  if (_pairingScreens > 0) core.setPairingMode(on_: true);
+}
+
+void pairingScreenClosed() {
+  if (_pairingScreens > 0) _pairingScreens--;
+  if (_pairingScreens == 0) core.setPairingMode(on_: false);
+}
+
 /// The saved device answered with a new identity: offer to forget it and
 /// pair again (the old pairing can never work again).
 Future<void> offerPairAgain(BuildContext context, String fingerprint, String name, String detail) async {

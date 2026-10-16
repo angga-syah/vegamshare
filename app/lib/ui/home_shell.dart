@@ -22,7 +22,7 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _tab = 0;
   final List<StreamSubscription> _subs = [];
   final Map<String, BuildContext> _openOffers = {};
@@ -39,6 +39,9 @@ class _HomeShellState extends State<HomeShell> {
     }));
     _subs.add(appState.finished.listen(_onFinished));
     _subs.add(appState.pairRequests.listen(_showPairRequest));
+    _subs.add(appState.replaceCandidates.listen(_offerReplace));
+    _subs.add(wifiLost.stream.listen(_onWifiLost));
+    WidgetsBinding.instance.addObserver(this);
     _subs.add(appState.pairRequestClosed.listen((id) {
       final ctx = _openOffers.remove(id);
       if (ctx != null && ctx.mounted) Navigator.pop(ctx);
@@ -53,10 +56,53 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     for (final s in _subs) {
       s.cancel();
     }
     super.dispose();
+  }
+
+  /// Back in the foreground: networks may have changed meanwhile.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) appState.refreshPlatformState();
+  }
+
+  Future<void> _onWifiLost(String what) async {
+    if (what == 'hotspot') {
+      appState.setHotspot(null);
+    } else {
+      appState.setJoined(null);
+      await core.rebindNetwork();
+    }
+    _messengerKey.currentState
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+          content: Text(tr(what == 'hotspot' ? 'hotspot_stopped' : 'joined_lost')), behavior: SnackBarBehavior.floating));
+  }
+
+  /// A new pairing looks like the reinstalled version of a saved device.
+  Future<void> _offerReplace(ReplaceCandidate c) async {
+    final ctx = _messengerKey.currentContext;
+    if (ctx == null) return;
+    final ids = c.old.map((d) => d.deviceId).join(', ');
+    final remove = await showDialog<bool>(
+      context: ctx,
+      builder: (dctx) => AlertDialog(
+        icon: const Icon(Icons.swap_horiz),
+        title: Text(tr('replace_title')),
+        content: Text(tr('replace_body', {'name': c.added.displayName, 'ids': ids})),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, false), child: Text(tr('keep_both'))),
+          FilledButton(onPressed: () => Navigator.pop(dctx, true), child: Text(tr('remove_old'))),
+        ],
+      ),
+    );
+    if (remove != true) return;
+    for (final d in c.old) {
+      await core.forgetDevice(fingerprint: d.fingerprint);
+    }
   }
 
   void _showOffer(IncomingOffer o) {

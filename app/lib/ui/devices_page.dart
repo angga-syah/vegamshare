@@ -6,11 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../main.dart' show appState;
-import '../platform/platform_services.dart' show setBackgroundService;
+import '../platform/platform_services.dart';
 import '../src/rust/api/vegam.dart' as core;
 import '../util/format.dart';
 import '../util/l10n.dart';
 import 'add_device_page.dart';
+import 'hotspot_page.dart';
 import 'common.dart';
 import 'device_page.dart';
 
@@ -36,6 +37,7 @@ class DevicesPage extends StatelessWidget {
             onRefresh: appState.refreshAll,
             child: PageBody(children: [
               const MyDeviceCard(),
+              const NetworkBanners(),
               SectionHeader(tr('paired_devices')),
               if (paired.isEmpty) EmptyHint(icon: Icons.devices, text: tr('no_paired')),
               for (final d in paired) DeviceTile(device: d),
@@ -57,6 +59,71 @@ class DevicesPage extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+/// Network situations the user should know about: Windows "Public"
+/// network (we are unreachable), our hotspot running, a joined hotspot.
+class NetworkBanners extends StatelessWidget {
+  const NetworkBanners({super.key});
+
+  // Listens itself: as a const child it is skipped when the parent rebuilds.
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(listenable: appState, builder: (context, _) => _banners(context));
+
+  Widget _banners(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final banners = <Widget>[];
+    if (appState.publicNetwork) {
+      banners.add(Card(
+        color: scheme.errorContainer,
+        child: ListTile(
+          leading: const Icon(Icons.public),
+          title: Text(tr('public_network_title')),
+          subtitle: Text(tr('public_network_body')),
+          trailing: TextButton(onPressed: openWindowsNetworkSettings, child: Text(tr('open_settings'))),
+        ),
+      ));
+    }
+    final h = appState.hotspot;
+    if (h != null) {
+      banners.add(Card(
+        color: scheme.tertiaryContainer,
+        child: ListTile(
+          leading: const Icon(Icons.wifi_tethering),
+          title: Text(tr('hotspot_active', {'name': h.ssid})),
+          subtitle: Text(tr('hotspot_active_sub')),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HotspotPage())),
+          trailing: TextButton(
+            onPressed: () async {
+              await stopHotspot();
+              appState.setHotspot(null);
+            },
+            child: Text(tr('hotspot_stop_short')),
+          ),
+        ),
+      ));
+    }
+    final joined = appState.joinedSsid;
+    if (joined != null) {
+      banners.add(Card(
+        color: scheme.secondaryContainer,
+        child: ListTile(
+          leading: const Icon(Icons.wifi),
+          title: Text(tr('joined_hotspot', {'name': joined})),
+          trailing: TextButton(
+            onPressed: () async {
+              await leaveWifi();
+              appState.setJoined(null);
+              await core.rebindNetwork();
+            },
+            child: Text(tr('disconnect')),
+          ),
+        ),
+      ));
+    }
+    if (banners.isEmpty) return const SizedBox.shrink();
+    return Padding(padding: const EdgeInsets.only(top: 8), child: Column(children: banners));
   }
 }
 

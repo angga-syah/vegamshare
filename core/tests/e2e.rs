@@ -635,3 +635,59 @@ async fn forgetting_a_device_cancels_its_unfinished_transfers() {
     assert_eq!(entry.status, "cancelled", "no longer offered as resumable");
     assert!(matches!(a.node.resume(&id).await, Err(Error::UnknownTransfer)));
 }
+
+// ---- 0.2.0: network changes and dead addresses ---------------------------
+
+#[tokio::test(flavor = "multi_thread")]
+async fn keeps_working_after_switching_network_socket() {
+    let tmp = tmpdir();
+    let a = TestNode::start(&tmp.path().join("a"), "A").await;
+    let b = TestNode::start(&tmp.path().join("b"), "B").await;
+    pair(&a, &b).await;
+    let old = b.node.local_addr().unwrap();
+
+    // B "joins a hotspot": its socket is re-created.
+    b.node.rebind_network().unwrap();
+    let new = b.node.local_addr().unwrap();
+    assert_ne!(new.port(), 0);
+
+    // B can still send...
+    let f = tmp.path().join("dari-b.txt");
+    std::fs::write(&f, b"setelah pindah jaringan").unwrap();
+    let mut rx = b.node.subscribe();
+    let id = b.node.send_paths(&a.node.fingerprint(), vec![f]).await.unwrap();
+    assert_eq!(wait_finished(&mut rx, &id).await, (TransferStatus::Completed, None));
+
+    // ...and A learned B's current address from that contact, so A can reach B.
+    let g = tmp.path().join("dari-a.txt");
+    std::fs::write(&g, b"balasan").unwrap();
+    let mut rx = a.node.subscribe();
+    let id = a.node.send_paths(&b.node.fingerprint(), vec![g]).await.unwrap();
+    assert_eq!(wait_finished(&mut rx, &id).await.0, TransferStatus::Completed, "old {old}, new {new}");
+    assert_eq!(std::fs::read(b.downloads().join("dari-a.txt")).unwrap(), b"balasan");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qr_with_dead_addresses_still_pairs_quickly() {
+    let tmp = tmpdir();
+    let a = TestNode::start(&tmp.path().join("a"), "A").await;
+    let b = TestNode::start(&tmp.path().join("b"), "B").await;
+    // Prepend addresses nobody answers on (like idle 169.254.x.x adapters).
+    let qr = a.node.pair_qr_code().replace("&a=", &format!("&a=127.0.0.1:9,127.0.0.1:19,169.254.10.10:47901,{},", a.addr()));
+    let started = std::time::Instant::now();
+    b.node.pair_with_qr(&qr).await.expect("pairs despite dead addresses");
+    assert!(started.elapsed() < Duration::from_secs(3), "took {:?}", started.elapsed());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn id_lookup_still_works_after_switching_network() {
+    let tmp = tmpdir();
+    let port = 47974;
+    let a = start_with_discovery(&tmp.path().join("a"), "A", port).await;
+    let b = start_with_discovery(&tmp.path().join("b"), "B", port).await;
+    // A switches network: both its QUIC and discovery sockets are recreated.
+    a.node.rebind_network().unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    // B finds A by ID alone (through A's new discovery socket and new port).
+    b.node.pair(&a.id(), None, &a.node.password()).await.expect("found by ID after rebind");
+}

@@ -210,6 +210,11 @@ pub fn set_receiving(on: bool) -> anyhow::Result<()> {
     node()?.set_receiving(on).map_err(err)
 }
 
+/// Call after the OS default network changed (joined/left a hotspot).
+pub fn rebind_network() -> anyhow::Result<()> {
+    node()?.rebind_network().map_err(err)
+}
+
 pub fn set_download_dir(dir: String) -> anyhow::Result<()> {
     node()?.set_download_dir(PathBuf::from(dir)).map_err(err)
 }

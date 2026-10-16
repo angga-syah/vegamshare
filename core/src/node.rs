@@ -143,6 +143,8 @@ pub(crate) struct Inner {
     lockout: std::sync::Mutex<Lockout>,
     presence: Mutex<HashMap<Fingerprint, Presence>>,
     discovery: RwLock<Option<Arc<Discovery>>>,
+    /// Stops the current discovery tasks (replaced on a network change).
+    discovery_stop: Mutex<Option<CancellationToken>>,
     pub transfers: Mutex<HashMap<String, Arc<ActiveTransfer>>>,
     pub pending_offers: Mutex<HashMap<String, oneshot::Sender<bool>>>,
     pub finalize_lock: Mutex<()>,
@@ -231,6 +233,40 @@ impl Inner {
         read(&self.download_dir)
     }
 
+    /// (Re)creates the discovery socket on the current default network,
+    /// keeping its state (answering, pairing visibility).
+    fn start_discovery(self: &Arc<Self>) -> Result<()> {
+        let Some(port) = self.cfg.discovery_port else { return Ok(()) };
+        if let Some(old) = lock(&self.discovery_stop).take() {
+            old.cancel();
+        }
+        let me = Announce {
+            device_id: self.identity.device_id.clone(),
+            name: read(&self.name),
+            platform: self.cfg.platform.clone(),
+            port: self.endpoint.local_addr()?.port(),
+            fp_short: self.identity.fingerprint.short(),
+        };
+        let events = self.events.clone();
+        match Discovery::bind(port, me, Box::new(move || drop(events.send(Event::NearbyChanged)))) {
+            Ok(d) => {
+                d.set_answering(self.receiving.load(std::sync::atomic::Ordering::SeqCst));
+                if self.pairing_open() {
+                    d.set_temp_visible(true);
+                }
+                let stop = self.shutdown.child_token();
+                d.spawn(stop.clone());
+                *lock(&self.discovery_stop) = Some(stop);
+                *self.discovery.write().unwrap_or_else(|e| e.into_inner()) = Some(d);
+            }
+            Err(e) => {
+                tracing::warn!("LAN discovery disabled: {e}");
+                *self.discovery.write().unwrap_or_else(|e| e.into_inner()) = None;
+            }
+        }
+        Ok(())
+    }
+
     fn discovery(&self) -> Option<Arc<Discovery>> {
         read(&self.discovery)
     }
@@ -241,6 +277,23 @@ impl Inner {
         let mut c = quinn::ClientConfig::new(Arc::new(crypto));
         c.transport_config(transport());
         Ok(c)
+    }
+
+    /// Dials all `addrs` at once; the first verified connection wins and
+    /// the other attempts are dropped. Used where a QR code lists several
+    /// interfaces, so a dead one does not cost a timeout each.
+    async fn dial_first(self: &Arc<Self>, addrs: &[SocketAddr], expected: Fingerprint) -> Option<quinn::Connection> {
+        let mut set = tokio::task::JoinSet::new();
+        for addr in addrs.iter().copied() {
+            let me = self.clone();
+            set.spawn(async move { me.dial(addr, Some(expected)).await });
+        }
+        while let Some(r) = set.join_next().await {
+            if let Ok(Ok(conn)) = r {
+                return Some(conn);
+            }
+        }
+        None
     }
 
     async fn dial(&self, addr: SocketAddr, expected: Option<Fingerprint>) -> Result<quinn::Connection> {
@@ -839,30 +892,14 @@ impl Node {
             activity: tokio::sync::Notify::new(),
             receiving: std::sync::atomic::AtomicBool::new(receiving),
             pairing_until: Mutex::new(None),
+            discovery_stop: Mutex::new(None),
             pending_pair: Mutex::new(None),
             qr_tokens: Mutex::new(quickpair::Tokens::default()),
             attempts: Mutex::new(HashMap::new()),
             cfg,
         });
 
-        if let Some(port) = inner.cfg.discovery_port {
-            let me = Announce {
-                device_id: inner.identity.device_id.clone(),
-                name: read(&inner.name),
-                platform: inner.cfg.platform.clone(),
-                port: inner.endpoint.local_addr()?.port(),
-                fp_short: inner.identity.fingerprint.short(),
-            };
-            let events = inner.events.clone();
-            match Discovery::bind(port, me, Box::new(move || drop(events.send(Event::NearbyChanged)))) {
-                Ok(d) => {
-                    d.set_answering(receiving);
-                    d.spawn(inner.shutdown.clone());
-                    *inner.discovery.write().unwrap_or_else(|e| e.into_inner()) = Some(d);
-                }
-                Err(e) => tracing::warn!("LAN discovery disabled: {e}"),
-            }
-        }
+        inner.start_discovery()?;
 
         tokio::spawn(inner.clone().accept_loop());
         tokio::spawn(inner.clone().progress_loop());
@@ -936,6 +973,22 @@ impl Node {
         if let Some(d) = self.inner.discovery() {
             d.set_answering(on);
         }
+        Ok(())
+    }
+
+    /// Re-creates the UDP socket after the OS default network changed (e.g.
+    /// the Android app joined a VegamShare hotspot and bound the process to
+    /// it). Live connections migrate; the port may change if it is busy.
+    pub fn rebind_network(&self) -> Result<()> {
+        let inner = &self.inner;
+        // The endpoint still owns its current port until rebind() returns,
+        // so the new socket takes a fresh one; peers learn it on the next
+        // contact (every connection records the sender's address).
+        let socket = std::net::UdpSocket::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))?;
+        inner.endpoint.rebind(socket)?;
+        // Discovery is a separate socket; recreate it on the new network too.
+        inner.start_discovery()?;
+        tracing::info!("network changed: listening on port {}", inner.endpoint.local_addr()?.port());
         Ok(())
     }
 
@@ -1129,7 +1182,7 @@ impl Node {
         QrPayload {
             device_id: inner.identity.device_id.clone(),
             fingerprint: inner.identity.fingerprint,
-            addrs: discovery::local_addresses().into_iter().map(|ip| SocketAddr::from((ip, port))).collect(),
+            addrs: discovery::local_addresses().into_iter().take(quickpair::MAX_QR_ADDRS).map(|ip| SocketAddr::from((ip, port))).collect(),
             token,
         }
         .encode()
@@ -1142,22 +1195,12 @@ impl Node {
         if qr.device_id == inner.identity.device_id {
             return Err(Error::InvalidArgument("that is this device's own code".into()));
         }
-        let mut conn = None;
-        for addr in &qr.addrs {
-            if let Ok(c) = inner.dial(*addr, Some(qr.fingerprint)).await {
-                conn = Some(c);
-                break;
-            }
-        }
+        let mut conn = inner.dial_first(&qr.addrs, qr.fingerprint).await;
         if conn.is_none()
             && let Some(d) = inner.discovery()
         {
-            for seen in d.find(&qr.device_id).await {
-                if let Ok(c) = inner.dial(seen.addr, Some(qr.fingerprint)).await {
-                    conn = Some(c);
-                    break;
-                }
-            }
+            let found: Vec<SocketAddr> = d.find(&qr.device_id).await.into_iter().map(|s| s.addr).collect();
+            conn = inner.dial_first(&found, qr.fingerprint).await;
         }
         let conn = conn.ok_or(Error::Unreachable)?;
         let result = async {

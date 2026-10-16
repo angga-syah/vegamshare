@@ -99,7 +99,25 @@ scanner dials the listed addresses with `fp` pinned (falling back to an ID
 lookup) and sends `pair_token`. The listener checks the token in constant time
 under the same rate limit as passwords, then answers `pair_ok`.
 
+**Hotspot QR (no Wi-Fi).** An Android phone can start a local-only hotspot
+(no internet, created by Android with a random name and WPA2/WPA3 password
+each time). Its QR is the normal pairing QR plus `&ws=<ssid>&wp=<password>&wt=<2|3>`.
+The scanner joins that network (Android 10+: `WifiNetworkSpecifier`, bound to
+the app process; Android 8-9: a temporary saved network), recreates its QUIC
+and discovery sockets on the new network, and puts the network's gateway, which
+is the hotspot phone, first in the address list. If the QR's device is already
+paired, nothing else happens; otherwise pairing continues as above. Unknown
+query keys are ignored, so older versions can still scan it as a normal QR.
+
 Every method is needed only once per pair of devices.
+
+## Network changes
+
+When the app joins or leaves a hotspot it rebinds the QUIC endpoint to a fresh
+UDP socket (new port) and restarts discovery. Peers learn the new address and
+port on the next contact. Local addresses are ranked for the QR and pairing
+hints: 192.168/16, 172.16/12, 10/8, others, 100.64/10, link-local 169.254/16
+(a direct cable), and the 464XLAT 192.0.0.0/29 last.
 
 ## Transfers
 

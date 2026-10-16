@@ -153,6 +153,7 @@ Future<void> initShareIntents() async {
   if (!Platform.isAndroid) return;
   _native.setMethodCallHandler((call) async {
     if (call.method == 'sharedPaths') _deliver(List<String>.from(call.arguments as List));
+    if (call.method == 'wifiLost') wifiLost.add(call.arguments as String);
   });
   try {
     final initial = await _native.invokeListMethod<String>('takeSharedPaths');
@@ -160,7 +161,116 @@ Future<void> initShareIntents() async {
   } catch (_) {}
 }
 
+// ------------------------------------------------------- "No Wi-Fi" mode (Android)
+
+/// "hotspot" when our hotspot stopped, "wifi" when the joined one dropped.
+final StreamController<String> wifiLost = StreamController<String>.broadcast();
+
+class HotspotInfo {
+  HotspotInfo(this.ssid, this.passphrase, this.wpa3);
+  final String ssid;
+  final String passphrase;
+  final bool wpa3;
+}
+
+/// Thrown with a code the UI translates: permission, location_off,
+/// unsupported, failed_N, join_failed.
+class WifiLinkException implements Exception {
+  WifiLinkException(this.code);
+  final String code;
+  @override
+  String toString() => 'WifiLinkException($code)';
+}
+
+Future<bool> hotspotSupported() async {
+  if (!Platform.isAndroid) return false;
+  try {
+    return await _native.invokeMethod<bool>('hotspotSupported') ?? false;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Wi-Fi permissions differ by Android version: location (8-12) or
+/// "nearby Wi-Fi devices" (13+). Location services must also be on for 8-12.
+Future<void> _ensureWifiPermission() async {
+  final sdk = await _native.invokeMethod<int>('sdkInt') ?? 0;
+  if (sdk >= 33) {
+    if (!(await Permission.nearbyWifiDevices.request()).isGranted) throw WifiLinkException('permission');
+  } else {
+    if (!(await Permission.locationWhenInUse.request()).isGranted) throw WifiLinkException('permission');
+    if (!await Permission.locationWhenInUse.serviceStatus.isEnabled) throw WifiLinkException('location_off');
+  }
+}
+
+Future<HotspotInfo> startHotspot() async {
+  await _ensureWifiPermission();
+  try {
+    final m = await _native.invokeMapMethod<String, dynamic>('startHotspot');
+    return HotspotInfo(m!['ssid'] as String, m['passphrase'] as String, m['wpa3'] as bool? ?? false);
+  } on PlatformException catch (e) {
+    throw WifiLinkException(e.code);
+  }
+}
+
+Future<void> stopHotspot() async {
+  if (Platform.isAndroid) await _native.invokeMethod('stopHotspot');
+}
+
+/// Joins the hotspot; returns its gateway address, which on a hotspot is
+/// the phone that created it (null if Android did not report one).
+Future<String?> joinWifi(String ssid, String passphrase, bool wpa3) async {
+  await _ensureWifiPermission();
+  try {
+    final m = await _native.invokeMapMethod<String, dynamic>('joinWifi', {'ssid': ssid, 'passphrase': passphrase, 'wpa3': wpa3});
+    return m?['gateway'] as String?;
+  } on PlatformException catch (e) {
+    throw WifiLinkException(e.code);
+  }
+}
+
+Future<void> leaveWifi() async {
+  if (Platform.isAndroid) await _native.invokeMethod('leaveWifi');
+}
+
+/// The hotspot we run and whether we joined one (survives activity restarts).
+Future<(HotspotInfo?, bool)> wifiState() async {
+  if (!Platform.isAndroid) return (null, false);
+  try {
+    final m = await _native.invokeMapMethod<String, dynamic>('wifiState');
+    final ssid = m?['hotspotSsid'] as String?;
+    final hotspot = ssid == null ? null : HotspotInfo(ssid, m!['hotspotPassphrase'] as String, m['hotspotWpa3'] as bool? ?? false);
+    return (hotspot, m?['joined'] as bool? ?? false);
+  } catch (_) {
+    return (null, false);
+  }
+}
+
 // ---------------------------------------------------------------- Windows
+
+/// True if Windows treats a connected network as "Public". The installer only
+/// opens the firewall for private networks, so other devices cannot reach us.
+/// Only adapters that are up and have a default gateway count: VPN, VM
+/// host-only and other virtual adapters are often "Public" but irrelevant.
+Future<bool> windowsOnPublicNetwork() async {
+  if (!Platform.isWindows) return false;
+  try {
+    final r = await Process.run('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      r"(Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' } | ForEach-Object { $_.NetProfile.NetworkCategory }) -join ','",
+    ]);
+    return (r.stdout as String).contains('Public');
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<void> openWindowsNetworkSettings() async {
+  if (Platform.isWindows) await Process.run('explorer.exe', ['ms-settings:network-status']);
+}
+
 
 const _shell = MethodChannel('vegamshare/shell');
 

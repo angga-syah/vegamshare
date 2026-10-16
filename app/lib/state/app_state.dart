@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../platform/platform_services.dart' show holdTransferLocks;
+import '../platform/platform_services.dart';
 import '../src/rust/api/vegam.dart' as core;
 import '../util/l10n.dart';
 
@@ -67,6 +67,14 @@ class PairRequest {
   final String code;
 }
 
+/// A newly paired device that looks like a replacement of a saved one
+/// (same name and platform, different identity): likely a reinstall.
+class ReplaceCandidate {
+  ReplaceCandidate(this.added, this.old);
+  final core.Device added;
+  final List<core.Device> old;
+}
+
 class FinishedNotice {
   FinishedNotice(this.id, this.outgoing, this.peer, this.status, this.error, this.errorKind, this.errorDetail, this.location);
   final String id;
@@ -88,6 +96,17 @@ class AppState extends ChangeNotifier {
   final Map<String, TransferUi> transfers = {};
 
   ThemeMode themeMode = ThemeMode.system;
+
+  /// "No Wi-Fi" mode state (Android).
+  HotspotInfo? hotspot;
+  String? joinedSsid;
+
+  /// Windows only: a connected network is "Public", so we are unreachable.
+  bool publicNetwork = false;
+
+  Set<String>? _knownDevices;
+  final _replace = StreamController<ReplaceCandidate>.broadcast();
+  Stream<ReplaceCandidate> get replaceCandidates => _replace.stream;
   bool _locksHeld = false;
 
   final _offers = StreamController<IncomingOffer>.broadcast();
@@ -123,6 +142,46 @@ class AppState extends ChangeNotifier {
 
   Future<void> refreshDevices() async {
     devices = await core.devices();
+    final now = devices.map((d) => d.fingerprint).toSet();
+    final known = _knownDevices;
+    if (known != null) {
+      for (final added in devices.where((d) => !known.contains(d.fingerprint))) {
+        final old = devices
+            .where((d) =>
+                d.fingerprint != added.fingerprint &&
+                d.platform == added.platform &&
+                d.name.toLowerCase() == added.name.toLowerCase())
+            .toList();
+        if (old.isNotEmpty) _replace.add(ReplaceCandidate(added, old));
+      }
+    }
+    _knownDevices = now;
+    notifyListeners();
+  }
+
+  DateTime? _publicCheckedAt;
+
+  /// Cheap on Android; on Windows the network check runs PowerShell, so it
+  /// happens at most every 30 s (focus changes call this often).
+  Future<void> refreshPlatformState() async {
+    final (h, joined) = await wifiState();
+    hotspot = h;
+    if (!joined) joinedSsid = null;
+    final now = DateTime.now();
+    if (_publicCheckedAt == null || now.difference(_publicCheckedAt!) > const Duration(seconds: 30)) {
+      _publicCheckedAt = now;
+      publicNetwork = await windowsOnPublicNetwork();
+    }
+    notifyListeners();
+  }
+
+  void setHotspot(HotspotInfo? h) {
+    hotspot = h;
+    notifyListeners();
+  }
+
+  void setJoined(String? ssid) {
+    joinedSsid = ssid;
     notifyListeners();
   }
 
@@ -250,6 +309,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _sub?.cancel();
     _offers.close();
+    _replace.close();
     _offerClosed.close();
     _finished.close();
     super.dispose();

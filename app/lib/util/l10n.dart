@@ -122,6 +122,65 @@ const Map<String, List<String>> _t = {
   'ready_on': ['Menunggu ketukan dari perangkat tersimpan. Tidak ada aktivitas sampai ada kiriman.', 'Waiting for saved devices to knock. No activity until something is sent.'],
   'ready_off': ['Tidak menerima. Perangkat ini tidak terlihat dan tidak menjawab siapa pun.', 'Not receiving. This device is invisible and answers no one.'],
   'paired_history': ['Dipasangkan dengan {name}', 'Paired with {name}'],
+  'no_wifi_title': ['Tidak ada Wi-Fi? Buat hotspot', 'No Wi-Fi? Create a hotspot'],
+  'no_wifi_sub': [
+    'HP ini membuat hotspot sementara tanpa internet (kuota tidak terpakai). Perangkat lain bergabung dengan memindai QR.',
+    'This phone creates a temporary hotspot without internet (no mobile data used). Others join by scanning the QR code.'
+  ],
+  'no_wifi_windows': [
+    'Di HP Android: Tambah → "Tidak ada Wi-Fi? Buat hotspot". Sambungkan laptop ke hotspot itu lewat menu Wi-Fi Windows, lalu buka Tambah perangkat di sini.',
+    'On the Android phone: Add → "No Wi-Fi? Create a hotspot". Connect this laptop to that hotspot from the Windows Wi-Fi menu, then open Add device here.'
+  ],
+  'hotspot_scan_hint': [
+    'Di HP lain: buka VegamShare → Tambah → Pindai QR. HP itu akan bergabung ke hotspot dan langsung tersambung.',
+    'On the other phone: open VegamShare → Add → Scan QR code. It joins the hotspot and connects right away.'
+  ],
+  'hotspot_laptop_title': ['Untuk laptop', 'For a laptop'],
+  'hotspot_laptop_hint': [
+    'Sambungkan Wi-Fi laptop ke jaringan di bawah, ubah jaringannya menjadi Privat, lalu buka Tambah perangkat di laptop dan ketuk HP ini.',
+    'Connect the laptop to the network below, set it to Private, then open Add device on the laptop and tap this phone.'
+  ],
+  'hotspot_name': ['Nama hotspot', 'Hotspot name'],
+  'hotspot_note': [
+    'Nama dan password berganti setiap kali hotspot dinyalakan (aturan Android). Perangkat yang sudah dipairing tidak perlu pairing ulang, cukup bergabung lagi.',
+    'Name and password change every time the hotspot starts (an Android rule). Paired devices do not need to pair again, they just join again.'
+  ],
+  'hotspot_stop': ['Matikan hotspot', 'Turn off hotspot'],
+  'hotspot_stop_short': ['Matikan', 'Turn off'],
+  'hotspot_stopped': ['Hotspot berhenti.', 'The hotspot stopped.'],
+  'hotspot_active': ['Hotspot aktif: {name}', 'Hotspot on: {name}'],
+  'hotspot_active_sub': ['Ketuk untuk menampilkan QR', 'Tap to show the QR code'],
+  'joining_hotspot': ['Bergabung ke hotspot {name}…', 'Joining hotspot {name}…'],
+  'pairing_progress': ['Menyambungkan…', 'Connecting…'],
+  'joined_ready': ['Tersambung ke {name}. Siap mengirim.', 'Connected to {name}. Ready to send.'],
+  'joined_hotspot': ['Tersambung ke hotspot {name}', 'Connected to hotspot {name}'],
+  'joined_lost': ['Koneksi ke hotspot terputus.', 'The hotspot connection dropped.'],
+  'disconnect': ['Putuskan', 'Disconnect'],
+  'public_network_title': ['Jaringan ini "Publik"', 'This network is "Public"'],
+  'public_network_body': [
+    'Windows memblokir perangkat lain untuk menghubungi PC ini di jaringan Publik. Ubah jaringan menjadi Privat.',
+    'Windows blocks other devices from reaching this PC on Public networks. Switch the network to Private.'
+  ],
+  'open_settings': ['Buka pengaturan', 'Open settings'],
+  'replace_title': ['Ganti perangkat lama?', 'Replace the old device?'],
+  'replace_body': [
+    '{name} baru saja ditambahkan, dan ada {name} lain yang tersimpan (ID {ids}). Biasanya itu perangkat yang sama sebelum aplikasinya diinstal ulang. Hapus entri lama?',
+    '{name} was just added, and another {name} is saved (ID {ids}). Usually that is the same device before the app was reinstalled. Remove the old entry?'
+  ],
+  'keep_both': ['Simpan keduanya', 'Keep both'],
+  'remove_old': ['Hapus yang lama', 'Remove old'],
+  'e_wifi_permission': ['Izin Wi-Fi/lokasi diperlukan untuk hotspot. Izinkan di pengaturan aplikasi.', 'Wi-Fi/location permission is needed for the hotspot. Allow it in the app settings.'],
+  'e_wifi_location_off': ['Nyalakan Lokasi (GPS) dulu, Android memerlukannya untuk hotspot.', 'Turn on Location first; Android requires it for the hotspot.'],
+  'e_wifi_unsupported': ['HP ini tidak mendukung hotspot otomatis.', 'This phone does not support the automatic hotspot.'],
+  'e_wifi_busy': [
+    'Hotspot tidak bisa dibuat karena hotspot/tethering lain sedang aktif. Matikan dulu, lalu coba lagi.',
+    'Cannot create the hotspot while another hotspot/tethering is on. Turn it off and try again.'
+  ],
+  'e_wifi_join_failed': ['Gagal bergabung ke hotspot. Pastikan Wi-Fi menyala dan dekat dengan HP pembuat hotspot.', 'Could not join the hotspot. Make sure Wi-Fi is on and you are near the hotspot phone.'],
+  'e_wifi_failed': [
+    'Hotspot tidak bisa dibuat ({code}). Matikan hotspot/tethering lain yang sedang aktif, lalu coba lagi.',
+    'Could not create the hotspot ({code}). Turn off any other hotspot/tethering and try again.'
+  ],
   'identity_changed_title': ['Pairing ulang diperlukan', 'Pair again'],
   'identity_changed_body': [
     'Di alamat terakhir {name} sekarang ada VegamShare dengan identitas lain (ID {id}). Biasanya karena aplikasinya diinstal ulang. Hapus {name} lalu pairing ulang?',

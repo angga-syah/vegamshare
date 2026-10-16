@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -103,6 +104,8 @@ class _StartupGateState extends State<StartupGate> {
         config: core.StartConfig(dataDir: dirs.data, downloadDir: dirs.downloads, deviceName: name, platform: platformName()),
       );
       await appState.attach(info);
+      // Not awaited: on Windows this runs PowerShell and must not delay startup.
+      unawaited(appState.refreshPlatformState());
       await setBackgroundService(info.receiving);
       await initShareIntents();
       if (mounted) setState(() => _ready = true);

@@ -26,6 +26,7 @@ class MainActivity : FlutterActivity() {
     private var resumed = false
     private var transferring = false
     private var channel: MethodChannel? = null
+    private var wifiLostForwarder: ((String) -> Unit)? = null
     private var dartReady = false
     private val pendingShared = mutableListOf<String>()
     private val main = Handler(Looper.getMainLooper())
@@ -63,6 +64,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        // WifiLink outlives activities; do not keep this one alive through it.
+        if (WifiLink.onLost === wifiLostForwarder) WifiLink.onLost = null
         transferring = false
         resumed = false
         syncLocks()
@@ -79,6 +82,10 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Tell Dart when the hotspot stops or the joined network drops.
+        val forward: (String) -> Unit = { what -> channel?.invokeMethod("wifiLost", what) }
+        wifiLostForwarder = forward
+        WifiLink.onLost = forward
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "vegamshare/native").apply {
             setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -88,6 +95,44 @@ class MainActivity : FlutterActivity() {
                         result.success(if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model")
                     }
                     "openPath" -> result.success(openFolder(call.arguments as String))
+                    "hotspotSupported" -> result.success(WifiLink.hotspotSupported)
+                    "sdkInt" -> result.success(Build.VERSION.SDK_INT)
+                    "startHotspot" -> WifiLink.startHotspot(this@MainActivity) { r ->
+                        r.fold(
+                            { h -> result.success(mapOf("ssid" to h.ssid, "passphrase" to h.passphrase, "wpa3" to h.wpa3)) },
+                            { e -> result.error(e.message ?: "failed", e.message, null) },
+                        )
+                    }
+                    "stopHotspot" -> {
+                        WifiLink.stopHotspot()
+                        result.success(null)
+                    }
+                    "joinWifi" -> {
+                        val ssid = call.argument<String>("ssid")
+                        val pass = call.argument<String>("passphrase")
+                        if (ssid.isNullOrEmpty() || pass.isNullOrEmpty()) {
+                            result.error("bad_args", "ssid and passphrase are required", null)
+                        } else {
+                            WifiLink.join(this@MainActivity, ssid, pass, call.argument<Boolean>("wpa3") == true) { r ->
+                                r.fold({ gw -> result.success(mapOf("gateway" to gw)) }, { e -> result.error(e.message ?: "join_failed", e.message, null) })
+                            }
+                        }
+                    }
+                    "leaveWifi" -> {
+                        WifiLink.leave(this@MainActivity)
+                        result.success(null)
+                    }
+                    "wifiState" -> {
+                        val h = WifiLink.currentHotspot()
+                        result.success(
+                            mapOf(
+                                "hotspotSsid" to h?.ssid,
+                                "hotspotPassphrase" to h?.passphrase,
+                                "hotspotWpa3" to h?.wpa3,
+                                "joined" to WifiLink.joined,
+                            ),
+                        )
+                    }
                     "holdLocks" -> {
                         transferring = call.arguments as Boolean
                         syncLocks()

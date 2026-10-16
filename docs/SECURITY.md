@@ -35,6 +35,14 @@
   per device, a paired device can fill the download folder. It cannot
   overwrite or read anything. Turn auto-accept off per device to be asked
   first.
+* **The hotspot QR contains the hotspot password in plain text.** Anyone who
+  photographs the screen can join that hotspot while it is on. It is a
+  local-only network without internet, and Android replaces its name and
+  password every time it starts; joining it gives no access to VegamShare
+  itself (pairing still needs the single-use token and the pinned key).
+* **Windows "Public" networks block VegamShare** (the installer opens the
+  firewall for Private networks only). The app shows a warning instead of
+  widening the rule.
 * **Password strength.** The generated password is 8 characters from a
   31-symbol alphabet (~40 bits). This is plenty against a rate-limited online
   attack. User-chosen passwords must be 6–64 characters.
