@@ -496,6 +496,33 @@ async fn reinstalled_device_is_reported_not_just_offline() {
 
 // ---- password-free pairing ----------------------------------------------
 
+#[tokio::test(flavor = "multi_thread")]
+async fn add_device_screen_pairs_even_with_receiving_off() {
+    let tmp = tmpdir();
+    let a = TestNode::start(&tmp.path().join("a"), "A").await;
+    let b = TestNode::start(&tmp.path().join("b"), "B").await;
+    a.node.set_receiving(false).unwrap();
+    a.node.set_pairing_mode(true);
+    let mut arx = a.node.subscribe();
+
+    // Visible while "Add device" is open, so pairing must work, not time out.
+    let (attempt, _) = b.node.pair_nearby_start(&a.id(), Some(&a.addr())).await.unwrap();
+    let (request, _) = next_pair_request(&mut arx).await;
+    a.node.respond_to_pair_request(&request, true).unwrap();
+    b.node.pair_nearby_finish(&attempt).await.unwrap();
+
+    // Files are still refused while receiving is off.
+    let f = tmp.path().join("tidak.txt");
+    std::fs::write(&f, b"x").unwrap();
+    let mut rx = b.node.subscribe();
+    let id = b.node.send_paths(&a.node.fingerprint(), vec![f]).await.unwrap();
+    assert_eq!(wait_finished(&mut rx, &id).await.0, TransferStatus::Rejected);
+
+    // Screen closed: absent again.
+    a.node.set_pairing_mode(false);
+    assert!(b.node.ping(&a.node.fingerprint()).await.is_err());
+}
+
 async fn next_pair_request(rx: &mut Receiver<Event>) -> (String, String) {
     tokio::time::timeout(WAIT, async {
         loop {
@@ -646,8 +673,15 @@ async fn keeps_working_after_switching_network_socket() {
     pair(&a, &b).await;
     let old = b.node.local_addr().unwrap();
 
-    // B "joins a hotspot": its socket is re-created.
-    b.node.rebind_network().unwrap();
+    // B "joins a hotspot": its socket is re-created. The app calls this from
+    // a thread without a Tokio runtime, so do the same here.
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            b.node.rebind_network().unwrap();
+            b.node.set_pairing_mode(true);
+            b.node.set_pairing_mode(false);
+        });
+    });
     let new = b.node.local_addr().unwrap();
     assert_ne!(new.port(), 0);
 

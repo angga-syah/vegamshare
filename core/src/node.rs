@@ -145,6 +145,10 @@ pub(crate) struct Inner {
     discovery: RwLock<Option<Arc<Discovery>>>,
     /// Stops the current discovery tasks (replaced on a network change).
     discovery_stop: Mutex<Option<CancellationToken>>,
+    /// The runtime the node was started on. Sync methods that touch sockets
+    /// or spawn tasks enter it, so callers on other threads (the Flutter
+    /// bridge) need no runtime of their own.
+    rt: tokio::runtime::Handle,
     pub transfers: Mutex<HashMap<String, Arc<ActiveTransfer>>>,
     pub pending_offers: Mutex<HashMap<String, oneshot::Sender<bool>>>,
     pub finalize_lock: Mutex<()>,
@@ -523,8 +527,9 @@ impl Inner {
                 _ = self.shutdown.cancelled() => break,
                 i = self.endpoint.accept() => match i { Some(i) => i, None => break },
             };
-            if !self.receiving.load(std::sync::atomic::Ordering::SeqCst) {
-                // "Ready to receive" is off: behave as if nobody is home.
+            // "Ready to receive" is off: behave as if nobody is home, unless
+            // the user has the "Add device" screen open (and so is visible).
+            if !self.receiving.load(std::sync::atomic::Ordering::SeqCst) && !self.pairing_open() {
                 incoming.ignore();
                 continue;
             }
@@ -602,6 +607,12 @@ impl Inner {
             Request::Offer { info, offer } => {
                 if !trusted {
                     return deny(send).await;
+                }
+                // Only reachable with receiving off while pairing is open.
+                if !self.receiving.load(std::sync::atomic::Ordering::SeqCst) {
+                    proto::write_frame(&mut send, &Response::Rejected).await?;
+                    let _ = send.finish();
+                    return Ok(());
                 }
                 self.handle_offer(conn, peer, info.sanitized(), offer, send).await?;
             }
@@ -893,6 +904,7 @@ impl Node {
             receiving: std::sync::atomic::AtomicBool::new(receiving),
             pairing_until: Mutex::new(None),
             discovery_stop: Mutex::new(None),
+            rt: tokio::runtime::Handle::current(),
             pending_pair: Mutex::new(None),
             qr_tokens: Mutex::new(quickpair::Tokens::default()),
             attempts: Mutex::new(HashMap::new()),
@@ -981,6 +993,7 @@ impl Node {
     /// it). Live connections migrate; the port may change if it is busy.
     pub fn rebind_network(&self) -> Result<()> {
         let inner = &self.inner;
+        let _rt = inner.rt.enter();
         // The endpoint still owns its current port until rebind() returns,
         // so the new socket takes a fresh one; peers learn it on the next
         // contact (every connection records the sender's address).
@@ -1077,6 +1090,7 @@ impl Node {
     /// call) this device is visible and accepts code-confirmed pairing.
     pub fn set_pairing_mode(&self, on: bool) {
         let inner = &self.inner;
+        let _rt = inner.rt.enter();
         if on {
             *lock(&inner.pairing_until) = Some(Instant::now() + quickpair::QR_TTL);
             if let Some(d) = inner.discovery() {

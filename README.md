@@ -79,7 +79,7 @@ Build notes:
   AGP 9 built-in Kotlin, which the Flutter template disables.
 - Release APKs refuse to build without a signing key. For a local test build only:
   `flutter build apk --release -Pvegamshare.debugSigning=true`.
-- Bump `version` in `app/pubspec.yaml` (e.g. `0.2.0+3`) for every build you share, so installed
+- Bump `version` in `app/pubspec.yaml` (e.g. `0.2.1+4`) for every build you share, so installed
   versions can be told apart and Android refuses to downgrade.
 
 ### Signing key (once)

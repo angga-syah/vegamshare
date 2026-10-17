@@ -106,6 +106,16 @@ class _AddDevicePageState extends State<AddDevicePage> {
         final known = appState.deviceByFingerprint(q['fp'] ?? '');
         if (known != null) {
           // Already paired: joining the network was all that was needed.
+          // One ping tells the hotspot phone our new address, so it can
+          // send to us too; it may need a moment after the join.
+          for (var attempt = 0; attempt < 4; attempt++) {
+            try {
+              await core.ping(fingerprint: known.fingerprint);
+              break;
+            } catch (_) {
+              await Future<void>.delayed(const Duration(seconds: 2));
+            }
+          }
           closeDialog();
           if (mounted) {
             final messenger = ScaffoldMessenger.of(context);
