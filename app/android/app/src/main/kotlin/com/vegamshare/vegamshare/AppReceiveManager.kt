@@ -36,8 +36,19 @@ object AppReceiveManager {
         var errors = 0
         val appUid = context.packageManager.getApplicationInfo(pkg, 0).uid
         val data = File(bundle, "data")
+        val dataTar = File(bundle, "data.tar")
         var dataMoved = 0
-        if (data.isDirectory) {
+        if (dataTar.isFile) {
+            prepareDataFolder(pkg, appUid)
+            val r = Priv.service!!.extractIntoApp(dataTar.path, pkg, "data").split('|')
+            if (r[0] == "ERR") {
+                errors++
+                Log.w(TAG, "extract: ${r.getOrNull(1)}")
+            } else {
+                dataMoved = r[0].toInt()
+                errors += r[1].toInt()
+            }
+        } else if (data.isDirectory) {
             prepareDataFolder(pkg, appUid)
             dataMoved = moveAll(data, pkg, "data").also { errors += it.second }.first
         }

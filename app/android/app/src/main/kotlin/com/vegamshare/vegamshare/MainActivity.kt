@@ -30,6 +30,8 @@ class MainActivity : FlutterActivity() {
     private var dartReady = false
     private val pendingShared = mutableListOf<String>()
     private val main = Handler(Looper.getMainLooper())
+    /** Opens files for a running app transfer, one binder call at a time. */
+    private val opener = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -181,16 +183,19 @@ class MainActivity : FlutterActivity() {
                     // "<pkg>/<data|obb>/<relative path>" -> a file descriptor the Rust core then owns.
                     "openAppFile" -> {
                         val spec = call.arguments as? String
-                        Thread {
+                        opener.execute {
                             val fd = try {
                                 val parts = spec!!.split('/', limit = 3)
-                                Priv.service!!.openAppFile(parts[0], parts[1], parts[2]).detachFd()
+                                val helper = Priv.service!!
+                                val pfd = if (parts[2] == AppSendManager.ARCHIVE) helper.openAppArchive(parts[0], parts[1])
+                                else helper.openAppFile(parts[0], parts[1], parts[2])
+                                pfd.detachFd()
                             } catch (e: Exception) {
                                 android.util.Log.w("VegamShare", "openAppFile $spec: ${e.message}")
                                 -1
                             }
                             main.post { result.success(fd) }
-                        }.start()
+                        }
                     }
                     // ---- Install received app (bundle folder: apk/, data/, obb/) ---------
                     "writeReceivedApp" -> {

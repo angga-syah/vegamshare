@@ -36,12 +36,21 @@ interface IPrivileged {
 
     // ---- Send app: only Android/data/<pkg> and Android/obb/<pkg> of user 0.
 
-    // Files under that app folder as "<size>\t<mtime ms>\t<path relative to the folder>" lines.
-    String listAppFiles(String pkg, String kind) = 9;
+    // Files under that app folder as "<size>\t<mtime ms>\t<path relative to the folder>" lines,
+    // streamed through a pipe (a big game has 100k+ files, far over the binder size limit).
+    ParcelFileDescriptor listAppFiles(String pkg, String kind) = 9;
 
     // Opens one file of that app folder for reading.
     ParcelFileDescriptor openAppFile(String pkg, String kind, String relPath) = 10;
 
     // Moves a received file into that app folder (copy + delete if a rename is not possible).
     String moveIntoApp(String srcPath, String pkg, String kind, String relPath) = 11;
+
+    // The whole app folder as one tar stream (caches left out for data): many small files
+    // go out at full speed. archiveSize fixes the file list; openAppArchive streams exactly it.
+    long archiveSize(String pkg, String kind) = 12;
+    ParcelFileDescriptor openAppArchive(String pkg, String kind) = 13;
+
+    // Unpacks a received tar into that app folder. Returns "<files>|<errors>".
+    String extractIntoApp(String tarPath, String pkg, String kind) = 14;
 }

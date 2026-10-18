@@ -76,26 +76,91 @@ class PrivilegedService(private val appUid: Int) : IPrivileged.Stub() {
         return File(base, relPath)
     }
 
-    override fun listAppFiles(pkg: String, kind: String): String {
+    override fun listAppFiles(pkg: String, kind: String): ParcelFileDescriptor {
         val base = appFolder(pkg, kind)
-        val sb = StringBuilder()
-        val stack = ArrayDeque<File>()
-        stack.add(base)
-        while (stack.isNotEmpty()) {
-            for (f in stack.removeLast().listFiles() ?: continue) {
-                if (isLink(f)) continue
-                if (f.isDirectory) stack.add(f)
-                else if (f.isFile) sb.append(f.length()).append('\t').append(f.lastModified()).append('\t')
-                    .append(f.path.substring(base.path.length + 1)).append('\n')
+        val (read, write) = ParcelFileDescriptor.createPipe()
+        Thread {
+            ParcelFileDescriptor.AutoCloseOutputStream(write).bufferedWriter().use { out ->
+                val stack = ArrayDeque<File>()
+                stack.add(base)
+                while (stack.isNotEmpty()) {
+                    for (f in stack.removeLast().listFiles() ?: continue) {
+                        if (isLink(f)) continue
+                        if (f.isDirectory) stack.add(f)
+                        else if (f.isFile) out.append(f.length().toString()).append('\t').append(f.lastModified().toString())
+                            .append('\t').append(f.path.substring(base.path.length + 1)).append('\n')
+                    }
+                }
             }
-        }
-        return sb.toString()
+        }.start()
+        return read
     }
 
     override fun openAppFile(pkg: String, kind: String, relPath: String): ParcelFileDescriptor {
         val f = inside(appFolder(pkg, kind), relPath)
         require(!isLink(f)) { "link" }
         return ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY)
+    }
+
+    /** File lists fixed by [archiveSize], so the stream matches the announced length. */
+    private val archivePlans = HashMap<String, List<Tar.Item>>()
+
+    private fun archivePlan(pkg: String, kind: String): List<Tar.Item> {
+        val base = appFolder(pkg, kind)
+        val items = ArrayList<Tar.Item>()
+        val stack = ArrayDeque<File>()
+        stack.add(base)
+        while (stack.isNotEmpty()) {
+            for (f in stack.removeLast().listFiles() ?: continue) {
+                if (isLink(f)) continue
+                val rel = f.path.substring(base.path.length + 1)
+                if (kind == "data" && (rel == "cache" || rel.startsWith("cache/"))) continue
+                if (f.isDirectory) stack.add(f) else if (f.isFile) items += Tar.Item(f, rel, f.length(), f.lastModified())
+            }
+        }
+        items.sortBy { it.name }
+        return items
+    }
+
+    override fun archiveSize(pkg: String, kind: String): Long {
+        val plan = archivePlan(pkg, kind)
+        synchronized(archivePlans) { archivePlans["$pkg/$kind"] = plan }
+        return if (plan.isEmpty()) 0 else Tar.length(plan)
+    }
+
+    override fun openAppArchive(pkg: String, kind: String): ParcelFileDescriptor {
+        val plan = synchronized(archivePlans) { archivePlans["$pkg/$kind"] } ?: archivePlan(pkg, kind)
+        val (read, write) = ParcelFileDescriptor.createPipe()
+        Thread {
+            // The reader closing early (a paused transfer) ends this with an IOException.
+            runCatching { ParcelFileDescriptor.AutoCloseOutputStream(write).buffered(1 shl 20).use { Tar.write(plan, it) } }
+        }.start()
+        return read
+    }
+
+    override fun extractIntoApp(tarPath: String, pkg: String, kind: String): String = try {
+        val tar = File(tarPath)
+        require(tar.path.startsWith("/storage/emulated/0/") && !tarPath.contains("/../")) { "bad source" }
+        val base = appFolder(pkg, kind)
+        var files = 0
+        var errors = 0
+        FileInputStream(tar).buffered(1 shl 20).use { input ->
+            Tar.read(input) { name, mtimeMs, data, _ ->
+                try {
+                    val dst = inside(base, name)
+                    ensureDir(dst.parentFile!!)
+                    FileOutputStream(dst).use { data.copyTo(it, 1 shl 20) }
+                    if (mtimeMs > 0) dst.setLastModified(mtimeMs)
+                    openUp(dst, dir = false)
+                    files++
+                } catch (_: Exception) {
+                    errors++
+                }
+            }
+        }
+        "$files|$errors"
+    } catch (e: Exception) {
+        "ERR|${e.message}"
     }
 
     override fun moveIntoApp(srcPath: String, pkg: String, kind: String, relPath: String): String = try {

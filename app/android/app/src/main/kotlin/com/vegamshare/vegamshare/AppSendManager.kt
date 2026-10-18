@@ -3,6 +3,7 @@ package com.vegamshare.vegamshare
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.os.ParcelFileDescriptor
 import org.json.JSONObject
 import java.io.File
 
@@ -12,6 +13,9 @@ import java.io.File
  * Nothing is copied first: APKs are read directly, data and obb through the helper.
  */
 object AppSendManager {
+
+    /** Path marker for "the whole folder as a tar stream" in helper file specs. */
+    const val ARCHIVE = "@archive"
 
     data class InstalledApp(
         val packageName: String,
@@ -59,21 +63,29 @@ object AppSendManager {
         var obbFiles = 0
         val helper = Priv.service
         if (helper != null) {
-            for (kind in listOf("data", "obb")) {
-                for (line in helper.listAppFiles(pkg, kind).lineSequence()) {
-                    val parts = line.split('\t', limit = 3)
-                    if (parts.size < 3) continue
-                    val rel = parts[2]
-                    // Caches are rebuilt by the app; leave them out.
-                    if (kind == "data" && rel.startsWith("cache/")) continue
-                    files += mapOf(
-                        "relPath" to "$kind/$rel",
-                        "path" to "$pkg/$kind/$rel",
-                        "size" to parts[0].toLong(),
-                        "mtime" to parts[1].toLong() / 1000,
-                        "viaHelper" to true,
-                    )
-                    if (kind == "data") dataFiles++ else obbFiles++
+            // Android/data: often 100k+ small files, so one tar stream instead of file by file.
+            val tarSize = helper.archiveSize(pkg, "data")
+            if (tarSize > 0) {
+                files += mapOf("relPath" to "data.tar", "path" to "$pkg/data/$ARCHIVE", "size" to tarSize, "mtime" to System.currentTimeMillis() / 1000, "viaHelper" to true)
+                dataFiles = 1
+            }
+            for (kind in listOf("obb")) {
+                ParcelFileDescriptor.AutoCloseInputStream(helper.listAppFiles(pkg, kind)).bufferedReader().useLines { lines ->
+                    for (line in lines) {
+                        val parts = line.split('\t', limit = 3)
+                        if (parts.size < 3) continue
+                        val rel = parts[2]
+                        // Caches are rebuilt by the app; leave them out.
+                        if (kind == "data" && rel.startsWith("cache/")) continue
+                        files += mapOf(
+                            "relPath" to "$kind/$rel",
+                            "path" to "$pkg/$kind/$rel",
+                            "size" to parts[0].toLong(),
+                            "mtime" to parts[1].toLong() / 1000,
+                            "viaHelper" to true,
+                        )
+                        if (kind == "data") dataFiles++ else obbFiles++
+                    }
                 }
             }
         }

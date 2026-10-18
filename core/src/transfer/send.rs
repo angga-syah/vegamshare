@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use tokio::io::AsyncReadExt;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
@@ -271,8 +271,10 @@ async fn send_file_once(
     opener: Option<&crate::node::ContentOpener>,
 ) -> Result<()> {
     let mut file = open_source(source, opener).await?;
-    let len = file.metadata().await?.len();
-    if len < entry.size {
+    // Host openers may hand over a stream (a pipe) whose length is not known
+    // up front; for those the reads below catch a short source instead.
+    let meta = file.metadata().await?;
+    if meta.is_file() && meta.len() < entry.size {
         return Err(Error::InvalidArgument(format!("{} changed since it was selected", entry.path)));
     }
     t.progress.set_current(&entry.path);
@@ -291,7 +293,7 @@ async fn send_file_once(
         hasher.update(&buf[..n]);
         left -= n as u64;
     }
-    file.seek(std::io::SeekFrom::Start(offset)).await?;
+    // The loop above already read up to `offset`; no seek, so streams work too.
 
     let mut sent = 0u64;
     let result: Result<()> = async {
