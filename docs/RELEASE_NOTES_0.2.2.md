@@ -1,5 +1,9 @@
 # VegamShare 0.2.2
 
+> **Superseded by 0.3.0.** Send app did not work in this version, and the Shizuku setup below no
+> longer exists: VegamShare 0.3.0 has its own helper (Settings → App data access). See
+> `RELEASE_NOTES_0.3.0.md`.
+
 New feature: send apps — transfer a complete Android app (APK + data + OBB) to another phone over LAN.
 
 ## What's new
