@@ -28,6 +28,20 @@ Fixes "Send app" from 0.2.2 and adds "Clone apps". Please update from 0.2.2.
   turned on; no code is needed.
 - **Receiving an app without the helper running** now offers the setup first and then continues the
   install, instead of silently leaving out the game data.
+- **Sending without app data access** warns first (Setup, or send the APK only) instead of quietly
+  sending only the APK.
+- **Progress and control:** preparing an app shows a dialog with Cancel, then the Transfer tab shows
+  progress, speed and time left with Pause and Stop. Installing a received app shows each stage
+  (install, data, OBB) with a progress bar and Cancel; a cancelled restore keeps the received files.
+- **Readable install errors:** newer version already installed, install via USB blocked (Xiaomi),
+  different signature, unsupported processor, not enough space.
+- **Floating number pad** for the pairing code (optional "Display over other apps"): the code stays
+  visible in Settings while typing; drag it out of the way if needed.
+- **Clone apps:** on phones that need the clone opened once (e.g. ColorOS), VegamShare now opens it,
+  waits for its data folder, closes it and copies on its own; files a game keeps locked (such as chat
+  databases) are skipped instead of reported as errors.
+- **Setup without mDNS:** if the phone does not announce the wireless debugging port, VegamShare finds
+  it on its own.
 
 ## Upgrading
 - **Android:** install over 0.2.x; your data is kept. If 0.2.2 refused to install, this version installs.
