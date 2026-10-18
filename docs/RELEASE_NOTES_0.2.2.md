@@ -1,32 +1,31 @@
 # VegamShare 0.2.2
 
-Fitur baru: kirim app — transfer aplikasi Android lengkap (APK + data + OBB) antar HP lewat LAN.
+New feature: send apps — transfer a complete Android app (APK + data + OBB) to another phone over LAN.
 
-## Fitur baru
+## What's new
 
-- **Kirim app** — pilih aplikasi yang terinstall, VegamShare mengirim APK + Android/data + OBB
-  ke HP lain di jaringan yang sama. Cocok untuk game besar seperti MLBB yang butuh waktu lama
-  jika didownload ulang.
-- **Instalasi otomatis** — penerima mendapat notifikasi saat app tiba dan bisa langsung install
-  tanpa keluar dari VegamShare (menggunakan PackageInstaller API, tidak perlu root).
-- **Shizuku embedded** — akses Android/data (folder yang dilindungi sistem) melalui Wireless
-  Debugging. Tidak butuh root atau PC; cukup Android 11+.
-- **Efisien storage** — file OBB besar (1–4 GB) dikirim langsung dari sumbernya tanpa disalin
-  dulu ke folder sementara, jadi tidak membutuhkan ruang 2× ukuran game.
+- **Send app** — select an installed app, and VegamShare sends the APK + Android/data + OBB to another
+  phone on the same network. Useful for large games like MLBB that take a long time to re-download.
+- **Auto-install** — the receiver gets a notification when the app arrives and can install it directly
+  from VegamShare without leaving the app (uses the PackageInstaller API; no root required).
+- **Shizuku embedded** — access Android/data (system-protected folder) via Wireless Debugging. No root
+  or PC needed; requires Android 11+.
+- **Storage-efficient** — large OBB files (1–4 GB) are sent directly from their source without being
+  copied to a temp location first, so no 2× storage overhead.
 
-## Setup Shizuku (untuk fitur kirim app)
+## Shizuku setup (required for send app)
 
-1. Aktifkan **Wireless Debugging** di Pengaturan → Opsi developer (Android 11+)
-2. Di VegamShare, buka halaman device → tap **Kirim app** → ikuti wizard **Setup Shizuku**
-3. Lakukan sekali di HP pengirim maupun penerima
+1. Enable **Wireless Debugging** in Settings → Developer options (Android 11+)
+2. In VegamShare, open a device page → tap **Send app** → follow the **Setup Shizuku** wizard
+3. Do this once on both the sending and receiving phone
 
 ## Upgrading
 
-- **Android:** install di atas versi lama, data tetap tersimpan.
+- **Android:** install over the previous version; your data is preserved.
 
 ## Downloads
 
-- `VegamShare-0.2.2.apk`: Android 7.0+ (arm64, armv7, x86_64). Fitur kirim app membutuhkan Android 11+.
+- `VegamShare-0.2.2.apk`: Android 7.0+ (arm64, armv7, x86_64). The send app feature requires Android 11+.
 - `SHA256SUMS.txt`: checksums.
 
-Lihat `RELEASE_NOTES_0.2.1.md` untuk perubahan sebelumnya.
+See `RELEASE_NOTES_0.2.1.md` for previous changes.
