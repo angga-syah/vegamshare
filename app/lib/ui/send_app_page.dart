@@ -178,6 +178,12 @@ class _SendAppPageState extends State<SendAppPage> with WidgetsBindingObserver {
                       ),
                     ],
                   ),
+                // Logins live in the app's private storage, which only root can copy.
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.info_outline),
+                  title: Text(tr('send_app_login_note')),
+                ),
                 Expanded(
                   child: _filtered.isEmpty
                       ? Center(child: Text(tr('no_apps')))

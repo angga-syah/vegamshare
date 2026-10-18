@@ -27,6 +27,7 @@ Windows installer (`.exe`) and Android app (`.apk`).
   app; per-device auto-accept; transfer history.
 - **Send apps with their data (Android):** send an installed app (APK + `Android/data` + OBB) to another
   phone, so a big game such as MLBB does not download again; the receiver installs it from VegamShare.
+  Logins usually stay behind (they live in storage only root can read): sign in again on the other phone.
 - **Clone apps (Android):** clone a game into the phone's second space (Dual apps, App cloner, work
   profile, Secure Folder, Private space) together with its downloaded data.
 

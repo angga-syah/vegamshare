@@ -91,6 +91,7 @@ const Map<String, List<String>> _t = {
   'send_app_no_data_title': ['Data game tidak akan ikut', 'Game data will not be included'],
   'send_app_no_data_body': ['Akses data aplikasi di HP ini belum aktif, jadi hanya APK {name} yang terkirim dan game harus mengunduh datanya lagi. Setup dulu supaya data ikut terkirim.', 'App data access is not on for this phone, so only the APK of {name} would be sent and the game would download its data again. Set it up first to include the data.'],
   'send_app_apk_only': ['Kirim APK saja', 'Send APK only'],
+  'send_app_login_note': ['Yang terkirim: APK dan data unduhan game (Android/data, OBB). Data login biasanya tidak ikut, jadi login lagi dengan akun game di HP tujuan.', 'Sent: the APK and the game\'s downloaded data (Android/data, OBB). Logins usually stay behind, so sign in with the game account on the other phone.'],
   'send_app_preparing_body': ['Mendata APK dan data game. Untuk game besar bisa sampai 1 menit. Setelah itu progres kirim tampil di tab Transfer, bisa dijeda atau dihentikan.', 'Listing the APKs and game data. A big game can take up to a minute. Then the progress shows in the Transfer tab, where it can be paused or stopped.'],
   'app_data_access': ['Akses data aplikasi', 'App data access'],
   'app_data_on': ['Aktif: data game (Android/data) ikut terkirim dan dipulihkan.', 'On: game data (Android/data) is sent and restored.'],
