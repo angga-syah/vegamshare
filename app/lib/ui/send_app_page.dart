@@ -67,7 +67,38 @@ class _SendAppPageState extends State<SendAppPage> with WidgetsBindingObserver {
     });
   }
 
+  /// The helper may still be connecting right after the app (re)started.
+  Future<bool> _helperReady() async {
+    for (var i = 0; i < 10; i++) {
+      if (await shizukuRunning()) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    return false;
+  }
+
   Future<void> _send(InstalledAppInfo app) async {
+    // Never leave the game data out without saying so.
+    if (!await _helperReady()) {
+      if (!mounted) return;
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (dctx) => AlertDialog(
+          icon: const Icon(Icons.warning_amber_rounded),
+          title: Text(tr('send_app_no_data_title')),
+          content: Text(tr('send_app_no_data_body', {'name': app.label})),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dctx, 'apk'), child: Text(tr('send_app_apk_only'))),
+            FilledButton(onPressed: () => Navigator.pop(dctx, 'setup'), child: Text(tr('shizuku_setup'))),
+          ],
+        ),
+      );
+      if (choice == 'setup') {
+        await openShizukuSetup();
+        return;
+      }
+      if (choice != 'apk' || !mounted) return;
+    }
+    if (!mounted) return;
     setState(() => _stagingPkg = app.packageName);
     var cancelled = false;
     BuildContext? dialogContext;

@@ -16,6 +16,7 @@ object AppSendManager {
 
     /** Path marker for "the whole folder as a tar stream" in helper file specs. */
     const val ARCHIVE = "@archive"
+    private const val HELPER_WAIT_MS = 5_000L
 
     data class InstalledApp(
         val packageName: String,
@@ -61,6 +62,9 @@ object AppSendManager {
 
         var dataFiles = 0
         var obbFiles = 0
+        // Right after the app (re)starts the helper needs a moment to hand over its binder.
+        val until = System.currentTimeMillis() + HELPER_WAIT_MS
+        while (Priv.service == null && System.currentTimeMillis() < until) Thread.sleep(200)
         val helper = Priv.service
         if (helper != null) {
             // Android/data: often 100k+ small files, so one tar stream instead of file by file.
