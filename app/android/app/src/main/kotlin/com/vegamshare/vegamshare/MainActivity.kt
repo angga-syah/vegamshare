@@ -17,7 +17,6 @@ import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import rikka.shizuku.Shizuku
 import java.io.File
 
 class MainActivity : FlutterActivity() {
@@ -144,9 +143,17 @@ class MainActivity : FlutterActivity() {
                         result.success(pendingShared.toList())
                         pendingShared.clear()
                     }
-                    // ---- Shizuku embedded setup ----------------------------------------
+                    // ---- Privileged helper (Wireless debugging) --------------------------
                     "shizukuAvailable" -> result.success(EmbeddedServer.isAvailable())
-                    "shizukuRunning" -> result.success(runCatching { Shizuku.pingBinder() }.getOrDefault(false))
+                    "shizukuRunning" -> result.success(Priv.state() == Priv.State.READY)
+                    "openClone" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            startActivity(Intent(this@MainActivity, CloneActivity::class.java))
+                            result.success(null)
+                        } else {
+                            result.error("unsupported", "Requires Android 11+", null)
+                        }
+                    }
                     "openShizukuSetup" -> {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             startActivity(Intent(this@MainActivity, EmbeddedSetupActivity::class.java))

@@ -7,7 +7,6 @@ import moe.shizuku.manager.adb.AdbKey
 import moe.shizuku.manager.adb.AdbMdns
 import moe.shizuku.manager.adb.AdbPairingClient
 import moe.shizuku.manager.adb.PreferenceAdbKeyStore
-import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -16,6 +15,11 @@ object EmbeddedServer {
     private const val TAG = "EmbeddedServer"
     private const val PREFS_NAME = "embedded_adb"
     private const val CONNECT_TIMEOUT_MS = 30_000L
+    private const val KEY_PAIRED = "paired"
+
+    /** This app's ADB key was accepted before; Android keeps it until the user revokes it. */
+    fun wasPaired(context: Context) =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getBoolean(KEY_PAIRED, false)
 
     fun isAvailable(): Boolean = try {
         AdbPairingClient.available()
@@ -28,26 +32,24 @@ object EmbeddedServer {
         return AdbKey(PreferenceAdbKeyStore(prefs), "${context.packageName}@VegamShare")
     }
 
-    fun extractApk(context: Context): File {
-        val dest = File(context.getExternalFilesDir(null) ?: context.filesDir, "shizuku.apk")
-        if (!dest.exists() || dest.length() < 1_000_000L) {
-            context.assets.open("shizuku.apk").use { input ->
-                dest.outputStream().use { output -> input.copyTo(output) }
-            }
-            Log.d(TAG, "Extracted shizuku.apk to ${dest.absolutePath}")
-        }
-        return dest
-    }
-
     /**
      * Pair with device via ADB wireless debugging.
      * Must be called from a background thread.
+     * @param host  Device IP (from mDNS or user input)
+     * @param port  Pairing port shown on device
+     * @param code  6-digit pairing code shown on device
      */
     fun pair(context: Context, host: String, port: Int, code: String) {
         val key = getKey(context)
-        AdbPairingClient(host, port, code, key).use { client ->
-            val ok = client.start()
-            if (!ok) throw AdbPairException("Pairing failed — check the code and try again.")
+        try {
+            AdbPairingClient(host, port, code, key).use { client ->
+                val ok = client.start()
+                if (!ok) throw AdbPairException(context.getString(R.string.pair_wrong_code))
+            }
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putBoolean(KEY_PAIRED, true).apply()
+        } catch (_: java.net.ConnectException) {
+            // Android stops the pairing service as soon as its dialog closes.
+            throw AdbPairException(context.getString(R.string.pair_closed))
         }
         Log.d(TAG, "Pairing successful")
     }
@@ -55,25 +57,31 @@ object EmbeddedServer {
     /**
      * Discover ADB connect port via mDNS, then connect and start the embedded server.
      * Must be called from a background thread.
+     * @param host  Device IP (same as used for pairing)
      */
     fun connectAndStart(context: Context, host: String) {
         val connectPort = waitForConnectPort(context, host)
         Log.d(TAG, "ADB connect port: $connectPort")
 
         val key = getKey(context)
-        val apkFile = extractApk(context)
-        val soPath = "${context.applicationInfo.nativeLibraryDir}/libshizuku.so"
+        val cmd = PrivServer.startCommand(context.applicationInfo.sourceDir, context.applicationInfo.uid)
 
         AdbClient(host, connectPort, key).use { client ->
             client.connect()
-            val cmd = "exec 3>&1; $soPath --apk=${apkFile.absolutePath}"
             Log.d(TAG, "Starting server: $cmd")
             client.shellCommand(cmd) { bytes ->
                 Log.d(TAG, "Server: ${String(bytes).trim()}")
             }
         }
+        val deadline = System.currentTimeMillis() + BINDER_TIMEOUT_MS
+        while (Priv.service == null) {
+            if (System.currentTimeMillis() > deadline) throw AdbPairException("The helper did not start.")
+            Thread.sleep(200)
+        }
         Log.d(TAG, "Server started successfully")
     }
+
+    private const val BINDER_TIMEOUT_MS = 10_000L
 
     private fun waitForConnectPort(context: Context, expectedHost: String): Int {
         var foundPort = -1

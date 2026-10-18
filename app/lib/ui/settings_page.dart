@@ -17,15 +17,34 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver {
   bool _startup = false;
   String _version = '';
+  bool _appData = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     startupEnabled().then((v) => mounted ? setState(() => _startup = v) : null);
     PackageInfo.fromPlatform().then((p) => mounted ? setState(() => _version = '${p.version}+${p.buildNumber}') : null);
+    _checkAppData();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkAppData();
+  }
+
+  void _checkAppData() {
+    if (!Platform.isAndroid) return;
+    shizukuRunning().then((v) => mounted ? setState(() => _appData = v) : null);
   }
 
   Future<String?> _ask(String title, String initial, {String? helper, bool obscure = false, int maxLength = 64}) {
@@ -132,6 +151,14 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                 ),
+                if (Platform.isAndroid)
+                  ListTile(
+                    leading: const Icon(Icons.admin_panel_settings_outlined),
+                    title: Text(tr('app_data_access')),
+                    subtitle: Text(tr(_appData ? 'app_data_on' : 'app_data_off')),
+                    trailing: _appData ? Icon(Icons.check_circle, color: scheme.primary) : TextButton(onPressed: openShizukuSetup, child: Text(tr('shizuku_setup'))),
+                    onTap: openShizukuSetup,
+                  ),
                 if (Platform.isWindows)
                   SwitchListTile(
                     secondary: const Icon(Icons.power_settings_new),

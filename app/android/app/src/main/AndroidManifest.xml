@@ -35,6 +35,8 @@
     <!-- Stay reachable while in the background -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Pairing code typed into a notification while Settings stays open -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -82,22 +84,28 @@
         <activity
             android:name=".EmbeddedSetupActivity"
             android:exported="false"
-            android:label="@string/setup_title" />
+            android:label="@string/setup_title"
+            android:theme="@style/SetupTheme" />
 
-        <!--
-            Two authorities on the same ShizukuProvider:
-            • ${applicationId}.shizuku  – the Shizuku API library uses this to bind the client
-            • moe.shizuku.privileged.api.shizuku – the embedded server always sends UserService
-              binders to this authority; registering it here means binders land directly in
-              VegamShare without a separate Shizuku app installed.
-        -->
+        <activity
+            android:name=".CloneActivity"
+            android:exported="false"
+            android:label="@string/clone_title"
+            android:theme="@style/SetupTheme"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
+
+        <!-- The privileged helper (shell user) hands over its binder here; callers are checked by uid. -->
         <provider
-            android:name="rikka.shizuku.ShizukuProvider"
-            android:authorities="${applicationId}.shizuku;moe.shizuku.privileged.api.shizuku"
-            android:enabled="true"
+            android:name=".PrivProvider"
+            android:authorities="${applicationId}.priv"
             android:exported="true"
             android:multiprocess="false"
-            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+            tools:ignore="ExportedContentProvider" />
+
+        <service
+            android:name=".PairingService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
 
         <meta-data
             android:name="flutterEmbedding"

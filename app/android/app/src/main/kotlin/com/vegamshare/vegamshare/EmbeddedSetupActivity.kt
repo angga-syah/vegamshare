@@ -1,7 +1,11 @@
 package com.vegamshare.vegamshare
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.widget.TextView
 import androidx.annotation.RequiresApi
@@ -50,6 +54,15 @@ class EmbeddedSetupActivity : AppCompatActivity() {
         retryButton = findViewById(R.id.retryButton)
 
         findViewById<MaterialButton>(R.id.step0Next).setOnClickListener {
+            if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFY)
+            } else {
+                startNotificationPairing()
+            }
+        }
+        findViewById<MaterialButton>(R.id.step0Manual).setOnClickListener {
             showStep(1)
         }
 
@@ -67,8 +80,40 @@ class EmbeddedSetupActivity : AppCompatActivity() {
         }
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_NOTIFY) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) startNotificationPairing() else showStep(1)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (Priv.service != null && step2.visibility != View.VISIBLE) {
+            showStep(2)
+            setupProgress.visibility = View.GONE
+            setupStatus.text = getString(R.string.setup_status_done)
+            doneButton.visibility = View.VISIBLE
+            retryButton.visibility = View.GONE
+        }
+    }
+
+    /** Pairing code goes into a notification; Settings opens on the Wireless debugging page. */
+    private fun startNotificationPairing() {
+        PairingService.start(this)
+        val wireless = Intent().setClassName("com.android.settings", "com.android.settings.SubSettings")
+            .putExtra(":settings:show_fragment", "com.android.settings.development.WirelessDebuggingFragment")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            startActivity(wireless)
+        } catch (_: Exception) {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+
     override fun onStart() {
         super.onStart()
+        // Start mDNS discovery when on pairing step
         if (step1.visibility == View.VISIBLE) {
             startMdnsDiscovery()
         }
@@ -109,9 +154,11 @@ class EmbeddedSetupActivity : AppCompatActivity() {
     }
 
     private fun startPairing() {
+        // Accepts "port" or "IP:port" as shown on the pairing screen.
         val portStr = portField.text?.toString()?.trim() ?: ""
-        val port = portStr.toIntOrNull()
-        if (port == null || port <= 0) {
+        val port = portStr.substringAfterLast(':').toIntOrNull()
+        if (portStr.contains(':')) portStr.substringBeforeLast(':').takeIf { it.isNotBlank() }?.let { discoveredHost = it }
+        if (port == null || port <= 0 || port > 65535) {
             mdnsStatus.text = getString(R.string.setup_enter_port)
             return
         }
@@ -157,5 +204,9 @@ class EmbeddedSetupActivity : AppCompatActivity() {
 
     private fun updateStatus(text: String) {
         runOnUiThread { setupStatus.text = text }
+    }
+
+    private companion object {
+        const val REQUEST_NOTIFY = 1
     }
 }

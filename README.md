@@ -25,6 +25,17 @@ Windows installer (`.exe`) and Android app (`.apk`).
   makes no announcements on the network.
 - **Convenient:** drag & drop and Explorer *Send to* on Windows; *Share to VegamShare* from any Android
   app; per-device auto-accept; transfer history.
+- **Send apps with their data (Android):** send an installed app (APK + `Android/data` + OBB) to another
+  phone, so a big game such as MLBB does not download again; the receiver installs it from VegamShare.
+- **Clone apps (Android):** clone a game into the phone's second space (Dual apps, App cloner, work
+  profile, Secure Folder, Private space) together with its downloaded data.
+
+### App data access (Android 11+)
+
+Android keeps `Android/data` closed to apps. VegamShare starts its own small helper through
+*Wireless debugging* (no PC, no root, no extra app): **Settings → App data access → Setup**, tap
+*Start*, open *Pair device with pairing code* and type the 6-digit code into the VegamShare
+notification. After a restart, just turn Wireless debugging on again; no code is needed.
 
 ## How to use
 
@@ -116,4 +127,6 @@ Type `help` for commands, e.g. `pair <id> <password> [ip]`, `pairnear <id>`, `qr
 VegamShare is released under the [MIT License](LICENSE). Third-party components keep their own licenses:
 Rust dependencies are listed in [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt) (generated with
 `cargo about generate -m app/rust/Cargo.toml about.hbs -o THIRD_PARTY_LICENSES.txt`); Flutter packages
-are listed in the app under Settings → About.
+are listed in the app under Settings → About. The Android wireless-debugging pairing code
+(`moe.shizuku.manager.adb`, `libadb.so`) comes from [Shizuku](https://github.com/RikkaApps/Shizuku)
+(Apache 2.0) and uses Bouncy Castle (MIT).

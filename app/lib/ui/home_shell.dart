@@ -69,8 +69,20 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   /// Back in the foreground: networks may have changed meanwhile.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) appState.refreshPlatformState();
+    if (state != AppLifecycleState.resumed) return;
+    appState.refreshPlatformState();
+    final waiting = _appAwaitingSetup;
+    if (waiting != null) {
+      shizukuRunning().then((ok) {
+        if (!ok || _appAwaitingSetup != waiting) return;
+        _appAwaitingSetup = null;
+        _showAppReceived(waiting);
+      });
+    }
   }
+
+  /// A received app whose install waits for the privileged helper setup.
+  AppReceiveNotice? _appAwaitingSetup;
 
   Future<void> _onWifiLost(String what) async {
     if (what == 'hotspot') {
@@ -209,6 +221,27 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       ),
     ).then((install) async {
       if (install != true) return;
+      if (Platform.isAndroid && !await shizukuRunning()) {
+        final c = _messengerKey.currentContext ?? context;
+        if (!c.mounted) return;
+        final setup = await showDialog<bool>(
+          context: c,
+          builder: (dctx) => AlertDialog(
+            title: Text(tr('app_data_access')),
+            content: Text(tr('app_data_setup_needed', {'label': n.label})),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dctx, false), child: Text(tr('install_without_data'))),
+              FilledButton(onPressed: () => Navigator.pop(dctx, true), child: Text(tr('shizuku_setup'))),
+            ],
+          ),
+        );
+        if (setup == null) return;
+        if (setup) {
+          _appAwaitingSetup = n;
+          await openShizukuSetup();
+          return;
+        }
+      }
       try {
         await writeReceivedApp(n.packageName, n.receivedDir);
         if (!Platform.isAndroid) return;

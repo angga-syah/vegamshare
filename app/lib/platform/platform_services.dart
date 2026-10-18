@@ -385,6 +385,12 @@ Future<void> openShizukuSetup() async {
   await _native.invokeMethod('openShizukuSetup');
 }
 
+/// Opens the native "clone apps into the second space" screen (Android 11+).
+Future<void> openClone() async {
+  if (!Platform.isAndroid) return;
+  await _native.invokeMethod('openClone');
+}
+
 /// Lists all user-installed apps on this device.
 Future<List<InstalledAppInfo>> listUserApps() async {
   if (!Platform.isAndroid) return [];

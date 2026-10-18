@@ -53,6 +53,7 @@ android {
 
     buildTypes {
         release {
+            proguardFiles("proguard-rules.pro")
             if (hasReleaseKey) {
                 signingConfig = signingConfigs.getByName("release")
             } else if (allowDebugSigning) {
@@ -78,10 +79,9 @@ flutter {
 }
 
 dependencies {
-    implementation("dev.rikka.shizuku:api:13.1.5")
-    implementation("dev.rikka.shizuku:provider:13.1.5")
     implementation("org.bouncycastle:bcpkix-jdk18on:1.80")
     implementation("androidx.appcompat:appcompat:1.8.0")
+    implementation("androidx.recyclerview:recyclerview:1.4.0")
     implementation("com.google.android.material:material:1.14.0")
 }
 

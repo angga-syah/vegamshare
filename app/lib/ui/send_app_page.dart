@@ -17,7 +17,7 @@ class SendAppPage extends StatefulWidget {
   State<SendAppPage> createState() => _SendAppPageState();
 }
 
-class _SendAppPageState extends State<SendAppPage> {
+class _SendAppPageState extends State<SendAppPage> with WidgetsBindingObserver {
   List<InstalledAppInfo> _apps = [];
   List<InstalledAppInfo> _filtered = [];
   bool _loading = true;
@@ -28,7 +28,23 @@ class _SendAppPageState extends State<SendAppPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _init();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Back from the setup screen or Settings: the helper may be running now.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    shizukuRunning().then((ok) {
+      if (mounted && ok != _shizukuOk) setState(() => _shizukuOk = ok);
+    });
   }
 
   Future<void> _init() async {
@@ -68,13 +84,13 @@ class _SendAppPageState extends State<SendAppPage> {
       );
 
       if (mounted) {
-        showSnack(context, tr('app_send_queued', {'name': app.label, 'device': widget.device.displayName}));
+        showSnack(context, tr('send_app_queued', {'name': app.label, 'device': widget.device.displayName}));
         Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
         setState(() => _stagingPkg = null);
-        showSnack(context, tr('app_send_failed', {'error': e.toString()}));
+        showSnack(context, tr('send_app_failed', {'error': e.toString()}));
       }
     }
   }

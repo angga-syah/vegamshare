@@ -219,6 +219,10 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
     }
 
     private fun exportKeyingMaterial(sslSocket: SSLSocket, label: String, context: ByteArray?, length: Int): ByteArray {
+        // The hidden Conscrypt class is blocked for apps on newer Android; this public API exists from 12.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return checkNotNull(android.net.ssl.SSLSockets.exportKeyingMaterial(sslSocket, label, context, length))
+        }
         val cls = Class.forName("com.android.org.conscrypt.Conscrypt")
         val method = cls.getMethod("exportKeyingMaterial",
             SSLSocket::class.java, String::class.java, ByteArray::class.java, Int::class.javaPrimitiveType)

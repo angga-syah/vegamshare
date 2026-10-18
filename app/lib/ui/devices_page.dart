@@ -21,7 +21,20 @@ class DevicesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr('app_name'))),
+      appBar: AppBar(
+        title: Text(tr('app_name')),
+        actions: [
+          if (Platform.isAndroid)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                onPressed: openClone,
+                icon: const Icon(Icons.copy_all),
+                label: Text(tr('clone_apps')),
+              ),
+            ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddDevicePage())),
         icon: const Icon(Icons.add_link),
