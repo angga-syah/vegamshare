@@ -3,36 +3,21 @@ package com.vegamshare.vegamshare
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.os.Build
-import android.util.Log
+import org.json.JSONObject
 import java.io.File
 
 /**
- * Sender side of "send app" feature.
- *
- * Lists installed user apps and collects the paths that need to be transferred:
- *   - base APK (and any split APKs)
- *   - OBB directory under Android/obb/<package>
- *   - data directory under Android/data/<package> (read via Shizuku)
+ * Sender side of "send app": an app goes out as one folder
+ *   app_info.json, apk/<base and splits>, data/<Android/data/pkg>, obb/<Android/obb/pkg>
+ * Nothing is copied first: APKs are read directly, data and obb through the helper.
  */
 object AppSendManager {
-
-    private const val TAG = "AppSendManager"
 
     data class InstalledApp(
         val packageName: String,
         val label: String,
         val apkPath: String,
         val splitApkPaths: List<String>,
-    )
-
-    data class AppTransferPaths(
-        val packageName: String,
-        val apkPaths: List<String>,
-        /** Absolute paths to OBB files; empty if none. */
-        val obbFiles: List<String>,
-        /** Absolute paths to Android/data files; empty if none. */
-        val dataFiles: List<String>,
     )
 
     /** Returns all user-installed (non-system) apps. */
@@ -55,113 +40,55 @@ object AppSendManager {
     }
 
     /**
-     * Collects all paths for a package.
-     * OBB files are read via normal file access; Android/data files via Shizuku.
-     * Must be called from a background thread.
+     * Files of the bundle as maps for Dart (relPath, path, size, mtime, viaHelper).
+     * Without the helper only the APKs go out. Call off the main thread.
      */
-    fun collectPaths(context: Context, packageName: String): AppTransferPaths {
+    fun prepareBundle(context: Context, pkg: String): Map<String, Any> {
         val pm = context.packageManager
-        @Suppress("DEPRECATION")
-        val pi = pm.getPackageInfo(packageName, 0)
-        val ai = pi.applicationInfo!!
+        val ai = pm.getApplicationInfo(pkg, 0)
+        val label = pm.getApplicationLabel(ai).toString()
+        val files = ArrayList<Map<String, Any>>()
 
-        val apkPaths = mutableListOf(ai.publicSourceDir ?: ai.sourceDir)
-        ai.splitPublicSourceDirs?.forEach { apkPaths.add(it) }
+        val apks = listOf(ai.publicSourceDir ?: ai.sourceDir) + (ai.splitPublicSourceDirs?.toList() ?: emptyList())
+        for (p in apks) {
+            val f = File(p)
+            files += mapOf("relPath" to "apk/${f.name}", "path" to f.path, "size" to f.length(), "mtime" to f.lastModified() / 1000, "viaHelper" to false)
+        }
 
-        // OBB: accessible without Shizuku on most devices
-        val extDir = context.externalCacheDirs.firstOrNull()?.parentFile?.parentFile
-        val obbDir = extDir?.let { File(it, "obb/$packageName") }
-        val obbFiles = if (obbDir?.exists() == true) collectFilesNormal(obbDir) else emptyList()
-
-        // Android/data: requires Shizuku service
-        val dataFiles = when (Priv.state()) {
-            Priv.State.READY -> {
-                try {
-                    Priv.listFiles("/storage/emulated/0/Android/data/$packageName")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Shizuku listFiles failed for $packageName", e)
-                    emptyList()
+        var dataFiles = 0
+        var obbFiles = 0
+        val helper = Priv.service
+        if (helper != null) {
+            for (kind in listOf("data", "obb")) {
+                for (line in helper.listAppFiles(pkg, kind).lineSequence()) {
+                    val parts = line.split('\t', limit = 3)
+                    if (parts.size < 3) continue
+                    val rel = parts[2]
+                    // Caches are rebuilt by the app; leave them out.
+                    if (kind == "data" && rel.startsWith("cache/")) continue
+                    files += mapOf(
+                        "relPath" to "$kind/$rel",
+                        "path" to "$pkg/$kind/$rel",
+                        "size" to parts[0].toLong(),
+                        "mtime" to parts[1].toLong() / 1000,
+                        "viaHelper" to true,
+                    )
+                    if (kind == "data") dataFiles++ else obbFiles++
                 }
             }
-            else -> {
-                Log.w(TAG, "Shizuku not ready — skipping Android/data for $packageName")
-                emptyList()
-            }
         }
 
-        return AppTransferPaths(
-            packageName = packageName,
-            apkPaths = apkPaths,
-            obbFiles = obbFiles,
-            dataFiles = dataFiles,
+        val info = File(context.cacheDir, "app_info_$pkg.json")
+        info.writeText(
+            JSONObject()
+                .put("packageName", pkg)
+                .put("label", label)
+                .put("dataFiles", dataFiles)
+                .put("obbFiles", obbFiles)
+                .toString()
         )
-    }
+        files += mapOf("relPath" to "app_info.json", "path" to info.path, "size" to info.length(), "mtime" to info.lastModified() / 1000, "viaHelper" to false)
 
-    /**
-     * Prepares an app for transfer. Only Android/data is copied to [stagingDir]
-     * (requires Shizuku); APK and OBB files are returned as direct source paths
-     * so they can be sent without copying — important for large games (OBB 1–4 GB).
-     *
-     * Returns a map:
-     *   "stagingDir"   — path to staging dir (contains app_info.json + data/)
-     *   "directPaths"  — list of APK + OBB paths to send directly
-     *
-     * Throws on fatal error; missing Shizuku is a warning (data/ will be empty).
-     */
-    fun prepareForSend(context: Context, packageName: String, stagingDir: File): Map<String, Any> {
-        val pm = context.packageManager
-        @Suppress("DEPRECATION")
-        val pi = pm.getPackageInfo(packageName, 0)
-        val ai = pi.applicationInfo!!
-        val label = pm.getApplicationLabel(ai).toString()
-
-        stagingDir.mkdirs()
-        val dataDir = File(stagingDir, "data").apply { mkdirs() }
-
-        // APK paths (accessible directly — no staging needed)
-        val directPaths = mutableListOf(ai.publicSourceDir ?: ai.sourceDir)
-        ai.splitPublicSourceDirs?.forEach { directPaths.add(it) }
-
-        // OBB paths (accessible directly)
-        val extDir = context.externalCacheDirs.firstOrNull()?.parentFile?.parentFile
-        val obbSrcDir = extDir?.let { File(it, "obb/$packageName") }
-        if (obbSrcDir?.exists() == true) {
-            obbSrcDir.walkTopDown().forEach { f ->
-                if (f.isFile) directPaths.add(f.absolutePath)
-            }
-        }
-
-        // Android/data: only this needs Shizuku staging (protected path)
-        if (Priv.state() == Priv.State.READY) {
-            val dataSrcBase = "/storage/emulated/0/Android/data/$packageName"
-            val files = try { Priv.listFiles(dataSrcBase) } catch (e: Exception) {
-                Log.e(TAG, "listFiles failed for $packageName", e)
-                emptyList()
-            }
-            for (absPath in files) {
-                val rel = absPath.removePrefix("$dataSrcBase/")
-                val dst = File(dataDir, rel)
-                dst.parentFile?.mkdirs()
-                val err = Priv.copyFile(absPath, dst.absolutePath)
-                if (err.isNotEmpty()) Log.w(TAG, "Stage copy failed for $rel: $err")
-            }
-        } else {
-            Log.w(TAG, "Shizuku not ready — Android/data skipped for $packageName")
-        }
-
-        // Metadata: receiver uses this to identify APKs to install and where OBB goes
-        val hasObb = obbSrcDir?.exists() == true
-        File(stagingDir, "app_info.json").writeText(
-            """{"packageName":"$packageName","label":"${label.replace("\"","\\\"")}" ,"hasObb":$hasObb}"""
-        )
-
-        Log.d(TAG, "Prepared $packageName: ${directPaths.size} direct paths, staging=$stagingDir")
-        return mapOf("stagingDir" to stagingDir.absolutePath, "directPaths" to directPaths)
-    }
-
-    private fun collectFilesNormal(dir: File): List<String> {
-        val result = mutableListOf<String>()
-        dir.walkTopDown().forEach { f -> if (f.isFile) result.add(f.absolutePath) }
-        return result
+        return mapOf("root" to label.ifBlank { pkg }, "files" to files, "withData" to (helper != null))
     }
 }

@@ -33,4 +33,15 @@ interface IPrivileged {
     String copyData(String pkg, int fromUser, int toUser, IProgress progress) = 7;
 
     void cancel() = 8;
+
+    // ---- Send app: only Android/data/<pkg> and Android/obb/<pkg> of user 0.
+
+    // Files under that app folder as "<size>\t<mtime ms>\t<path relative to the folder>" lines.
+    String listAppFiles(String pkg, String kind) = 9;
+
+    // Opens one file of that app folder for reading.
+    ParcelFileDescriptor openAppFile(String pkg, String kind, String relPath) = 10;
+
+    // Moves a received file into that app folder (copy + delete if a rename is not possible).
+    String moveIntoApp(String srcPath, String pkg, String kind, String relPath) = 11;
 }

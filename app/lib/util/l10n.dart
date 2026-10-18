@@ -92,6 +92,8 @@ const Map<String, List<String>> _t = {
   'install': ['Install', 'Install'],
   'app_installing': ['Menginstall {label}…', 'Installing {label}…'],
   'app_install_failed': ['Gagal install: {error}', 'Install failed: {error}'],
+  'app_installed': ['{label} terpasang, {files} file data dipulihkan.', '{label} installed, {files} data files restored.'],
+  'app_installed_errors': ['{label} terpasang, {files} file data dipulihkan, {errors} gagal.', '{label} installed, {files} data files restored, {errors} failed.'],
   'drop_here': ['Lepaskan file atau folder di sini untuk mengirim', 'Drop files or folders here to send'],
   'auto_accept': ['Terima otomatis dari perangkat ini', 'Accept automatically from this device'],
   'auto_accept_sub': ['Jika mati, Anda akan ditanya setiap kali', 'If off, you will be asked every time'],

@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `device_dto`, `device_of`, `err`, `fp`, `my_info_dto`, `node`, `on_rt`, `rt`
+// These functions are ignored because they are not marked as `pub`: `device_dto`, `device_of`, `err`, `fp`, `my_info_dto`, `node`, `on_rt`, `open_priv`, `rt`
 
 /// Starts the background service once; later calls return the same info.
 Future<MyInfo> start({required StartConfig config}) =>
@@ -108,6 +108,22 @@ Future<String> sendPaths({
   paths: paths,
 );
 
+/// Sends files as one folder named `root`, without copying them first.
+Future<String> sendBundle({
+  required String fingerprint,
+  required String root,
+  required List<BundleFile> files,
+}) => RustLib.instance.api.crateApiVegamSendBundle(
+  fingerprint: fingerprint,
+  root: root,
+  files: files,
+);
+
+/// Dart hands in a function that opens a path through the privileged helper
+/// and returns a file descriptor the core then owns (-1 on failure).
+Future<void> setPrivOpener({required FutureOr<int> Function(String) open}) =>
+    RustLib.instance.api.crateApiVegamSetPrivOpener(open: open);
+
 Future<void> respondToOffer({
   required String transferId,
   required bool accept,
@@ -134,6 +150,44 @@ Future<List<HistoryItem>> history({required int limit}) =>
 Future<void> clearHistory() => RustLib.instance.api.crateApiVegamClearHistory();
 
 Future<void> shutdown() => RustLib.instance.api.crateApiVegamShutdown();
+
+/// One file of an app bundle. `rel_path` is relative to the bundle folder.
+/// `via_helper`: the app cannot read `path` itself (Android/data, obb), so
+/// it is opened through the privileged helper when sent.
+class BundleFile {
+  final String relPath;
+  final String path;
+  final BigInt size;
+  final PlatformInt64 mtime;
+  final bool viaHelper;
+
+  const BundleFile({
+    required this.relPath,
+    required this.path,
+    required this.size,
+    required this.mtime,
+    required this.viaHelper,
+  });
+
+  @override
+  int get hashCode =>
+      relPath.hashCode ^
+      path.hashCode ^
+      size.hashCode ^
+      mtime.hashCode ^
+      viaHelper.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BundleFile &&
+          runtimeType == other.runtimeType &&
+          relPath == other.relPath &&
+          path == other.path &&
+          size == other.size &&
+          mtime == other.mtime &&
+          viaHelper == other.viaHelper;
+}
 
 class Device {
   final String fingerprint;

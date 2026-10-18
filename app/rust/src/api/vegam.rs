@@ -7,7 +7,7 @@ use std::future::Future;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use flutter_rust_bridge::frb;
+use flutter_rust_bridge::{frb, DartFnFuture};
 use vegamshare_core::{Config, Error, Fingerprint, Node};
 
 use crate::frb_generated::StreamSink;
@@ -155,12 +155,13 @@ pub async fn start(config: StartConfig) -> anyhow::Result<MyInfo> {
         return Ok(my_info_dto(n));
     }
     let started = on_rt(async move {
-        let cfg = Config::new(
+        let mut cfg = Config::new(
             PathBuf::from(config.data_dir),
             PathBuf::from(config.download_dir),
             config.device_name,
             config.platform,
         );
+        cfg.content_opener = Some(std::sync::Arc::new(open_priv));
         Node::start(cfg).await
     })
     .await?
@@ -323,6 +324,82 @@ pub async fn send_paths(fingerprint: String, paths: Vec<String>) -> anyhow::Resu
     let f = fp(&fingerprint)?;
     let paths = paths.into_iter().map(PathBuf::from).collect();
     on_rt(async move { n.send_paths(&f, paths).await }).await?.map_err(err)
+}
+
+/// One file of an app bundle. `rel_path` is relative to the bundle folder.
+/// `via_helper`: the app cannot read `path` itself (Android/data, obb), so
+/// it is opened through the privileged helper when sent.
+pub struct BundleFile {
+    pub rel_path: String,
+    pub path: String,
+    pub size: u64,
+    pub mtime: i64,
+    pub via_helper: bool,
+}
+
+/// Sends files as one folder named `root`, without copying them first.
+pub async fn send_bundle(fingerprint: String, root: String, files: Vec<BundleFile>) -> anyhow::Result<String> {
+    use vegamshare_core::proto::Entry;
+    use vegamshare_core::Source;
+
+    let n = node()?.clone();
+    let f = fp(&fingerprint)?;
+    let root = vegamshare_core::pathsafe::sanitize_component(&root);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    // BTreeSet order puts every folder after its parent ("a" < "a/b").
+    let mut dirs = std::collections::BTreeSet::new();
+    for file in &files {
+        let mut parts: Vec<&str> = file.rel_path.split('/').collect();
+        parts.pop();
+        for i in 1..=parts.len() {
+            dirs.insert(parts[..i].join("/"));
+        }
+    }
+    let mut items = vec![(Entry { path: root.clone(), is_dir: true, size: 0, mtime: now }, Source::Dir)];
+    for d in dirs {
+        items.push((Entry { path: format!("{root}/{d}"), is_dir: true, size: 0, mtime: now }, Source::Dir));
+    }
+    for file in files {
+        let source = if file.via_helper { Source::Uri(format!("{PRIV_SCHEME}{}", file.path)) } else { Source::Path(PathBuf::from(file.path)) };
+        items.push((Entry { path: format!("{root}/{}", file.rel_path), is_dir: false, size: file.size, mtime: file.mtime }, source));
+    }
+    on_rt(async move { n.send_entries(&f, items).await }).await?.map_err(err)
+}
+
+const PRIV_SCHEME: &str = "priv:";
+
+type PrivOpener = std::sync::Arc<dyn Fn(String) -> DartFnFuture<i32> + Send + Sync>;
+static PRIV_OPENER: std::sync::Mutex<Option<PrivOpener>> = std::sync::Mutex::new(None);
+
+/// Dart hands in a function that opens a path through the privileged helper
+/// and returns a file descriptor the core then owns (-1 on failure).
+pub fn set_priv_opener(open: impl Fn(String) -> DartFnFuture<i32> + Send + Sync + 'static) {
+    *PRIV_OPENER.lock().unwrap() = Some(std::sync::Arc::new(open));
+}
+
+/// Called by the core on a blocking thread when a `priv:` file is sent.
+fn open_priv(uri: &str) -> std::io::Result<std::fs::File> {
+    use std::io::{Error as IoError, ErrorKind};
+    let path = uri.strip_prefix(PRIV_SCHEME).ok_or_else(|| IoError::new(ErrorKind::InvalidInput, "unknown source"))?;
+    let opener = PRIV_OPENER.lock().unwrap().clone().ok_or_else(|| IoError::other("privileged helper not available"))?;
+    let fd = rt().handle().block_on(opener(path.to_string()));
+    if fd < 0 {
+        return Err(IoError::new(ErrorKind::PermissionDenied, format!("cannot open {path}")));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::FromRawFd;
+        // SAFETY: the fd was detached from its ParcelFileDescriptor, so nothing else closes it.
+        Ok(unsafe { std::fs::File::from_raw_fd(fd) })
+    }
+    #[cfg(not(unix))]
+    {
+        Err(IoError::other("not supported on this platform"))
+    }
 }
 
 pub fn respond_to_offer(transfer_id: String, accept: bool) -> anyhow::Result<()> {

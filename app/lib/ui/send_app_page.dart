@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../platform/platform_services.dart';
 import '../src/rust/api/vegam.dart' as core;
@@ -72,16 +69,9 @@ class _SendAppPageState extends State<SendAppPage> with WidgetsBindingObserver {
   Future<void> _send(InstalledAppInfo app) async {
     setState(() => _stagingPkg = app.packageName);
     try {
-      final cache = await getTemporaryDirectory();
-      final stagingDir = Directory('${cache.path}/app_send/${app.packageName}_${DateTime.now().millisecondsSinceEpoch}');
-      await stagingDir.create(recursive: true);
-
-      final staged = await stageAppFiles(app.packageName, stagingDir.path);
-      // Send stagingDir (has app_info.json + data/) plus APK+OBB directly
-      await core.sendPaths(
-        fingerprint: widget.device.fingerprint,
-        paths: [staged.stagingDir, ...staged.directPaths],
-      );
+      // One folder (apk/, data/, obb/); data is read through the helper while sending.
+      final bundle = await prepareAppBundle(app.packageName);
+      await core.sendBundle(fingerprint: widget.device.fingerprint, root: bundle.root, files: bundle.files);
 
       if (mounted) {
         showSnack(context, tr('send_app_queued', {'name': app.label, 'device': widget.device.displayName}));

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64Util;
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:launch_at_startup/launch_at_startup.dart';
 import 'package:open_filex/open_filex.dart';
@@ -11,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:tray_manager/tray_manager.dart' as tm;
 import 'package:window_manager/window_manager.dart';
 
+import '../src/rust/api/vegam.dart' as core;
 import '../util/l10n.dart';
 
 /// Paths handed to the app from outside: Android "Share to", Explorer
@@ -407,37 +409,44 @@ Future<List<InstalledAppInfo>> listUserApps() async {
   } catch (_) { return []; }
 }
 
-class AppStagingResult {
-  AppStagingResult({required this.stagingDir, required this.directPaths});
-  /// Contains app_info.json + data/ (Android/data files staged via Shizuku).
-  final String stagingDir;
-  /// APK + OBB paths — send these directly without staging to save storage.
-  final List<String> directPaths;
+class AppBundle {
+  AppBundle({required this.root, required this.files, required this.withData});
+  /// Folder name on the receiving side (the app's label).
+  final String root;
+  final List<core.BundleFile> files;
+  /// False when the helper is not running: only the APKs go out.
+  final bool withData;
 }
 
-/// Stages Android/data into [stagingDir] and returns APK+OBB paths directly.
-/// Avoids copying large OBB files (can be several GB) to a temp location.
-Future<AppStagingResult> stageAppFiles(String packageName, String stagingDir) async {
-  final raw = await _native.invokeMapMethod<String, dynamic>('stageAppFiles', {
-    'packageName': packageName,
-    'stagingDir': stagingDir,
-  });
-  return AppStagingResult(
-    stagingDir: raw?['stagingDir'] as String? ?? stagingDir,
-    directPaths: (raw?['directPaths'] as List?)?.cast<String>() ?? [],
-  );
+/// Lists an app's APKs, Android/data and obb files as one bundle; nothing is copied.
+Future<AppBundle> prepareAppBundle(String packageName) async {
+  final raw = await _native.invokeMapMethod<String, dynamic>('prepareAppBundle', {'packageName': packageName});
+  final files = ((raw?['files'] as List?) ?? []).cast<Map>().map((m) => core.BundleFile(
+        relPath: m['relPath'] as String,
+        path: m['path'] as String,
+        size: BigInt.from(m['size'] as int),
+        mtime: PlatformInt64Util.from(m['mtime'] as int),
+        viaHelper: m['viaHelper'] as bool,
+      )).toList();
+  return AppBundle(root: raw?['root'] as String? ?? packageName, files: files, withData: raw?['withData'] as bool? ?? false);
 }
 
-/// On the receiver: installs APK and writes Android/data + OBB from [receivedDir].
-/// [receivedDir] must contain apk/, data/, obb/ subdirs (as staged by the sender).
-Future<void> writeReceivedApp(String packageName, String receivedDir) async {
+/// Lets the transfer engine read Android/data and obb files through the helper.
+Future<void> registerAppFileOpener() async {
   if (!Platform.isAndroid) return;
-  await _native.invokeMethod('writeReceivedApp', {
-    'packageName': packageName,
-    'receivedDir': receivedDir,
-  });
+  await core.setPrivOpener(open: (spec) async => await _native.invokeMethod<int>('openAppFile', spec) ?? -1);
 }
 
+/// On the receiver: installs the app from a received bundle folder, then moves its data in.
+/// Returns `installed|<data files>|<obb files>|<errors>` or `confirm`.
+Future<String> writeReceivedApp(String packageName, String receivedDir) async {
+  if (!Platform.isAndroid) return '';
+  return await _native.invokeMethod<String>('writeReceivedApp', {
+        'packageName': packageName,
+        'receivedDir': receivedDir,
+      }) ??
+      '';
+}
 // ---------------------------------------------------------------- Paths
 
 /// Opens a folder (or the folder containing a file) in the system UI.

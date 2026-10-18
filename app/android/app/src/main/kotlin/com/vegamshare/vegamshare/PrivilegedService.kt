@@ -2,6 +2,7 @@ package com.vegamshare.vegamshare
 
 import android.os.Binder
 import android.os.Parcel
+import android.os.ParcelFileDescriptor
 import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
@@ -59,6 +60,58 @@ class PrivilegedService(private val appUid: Int) : IPrivileged.Stub() {
         } catch (e: Exception) {
             e.message ?: e.javaClass.simpleName
         }
+    }
+
+    // ---- send app: one app's data folders ------------------------------------
+
+    /** The app folder, or an exception for anything outside it. */
+    private fun appFolder(pkg: String, kind: String): File {
+        checkPackage(pkg)
+        require(kind == "data" || kind == "obb") { "bad kind" }
+        return root(0, kind, pkg)
+    }
+
+    private fun inside(base: File, relPath: String): File {
+        require(relPath.isNotEmpty() && !relPath.startsWith("/") && relPath.split('/').none { it == ".." || it.isEmpty() }) { "bad path" }
+        return File(base, relPath)
+    }
+
+    override fun listAppFiles(pkg: String, kind: String): String {
+        val base = appFolder(pkg, kind)
+        val sb = StringBuilder()
+        val stack = ArrayDeque<File>()
+        stack.add(base)
+        while (stack.isNotEmpty()) {
+            for (f in stack.removeLast().listFiles() ?: continue) {
+                if (isLink(f)) continue
+                if (f.isDirectory) stack.add(f)
+                else if (f.isFile) sb.append(f.length()).append('\t').append(f.lastModified()).append('\t')
+                    .append(f.path.substring(base.path.length + 1)).append('\n')
+            }
+        }
+        return sb.toString()
+    }
+
+    override fun openAppFile(pkg: String, kind: String, relPath: String): ParcelFileDescriptor {
+        val f = inside(appFolder(pkg, kind), relPath)
+        require(!isLink(f)) { "link" }
+        return ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY)
+    }
+
+    override fun moveIntoApp(srcPath: String, pkg: String, kind: String, relPath: String): String = try {
+        val src = File(srcPath)
+        require(src.path.startsWith("/storage/emulated/0/") && !srcPath.contains("/../")) { "bad source" }
+        val dst = inside(appFolder(pkg, kind), relPath)
+        ensureDir(dst.parentFile!!)
+        if (!src.renameTo(dst)) {
+            FileInputStream(src).use { i -> FileOutputStream(dst).use { o -> i.copyTo(o, 1 shl 20) } }
+            dst.setLastModified(src.lastModified())
+            src.delete()
+        }
+        openUp(dst, dir = false)
+        ""
+    } catch (e: Exception) {
+        e.message ?: e.javaClass.simpleName
     }
 
     // ---- clone: game data between users ------------------------------------

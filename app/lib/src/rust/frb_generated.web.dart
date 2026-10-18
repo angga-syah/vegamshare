@@ -27,6 +27,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
+  FutureOr<int> Function(String)
+  dco_decode_DartFn_Inputs_String_Output_i_32_AnyhowException(dynamic raw);
+
+  @protected
+  Object dco_decode_DartOpaque(dynamic raw);
+
+  @protected
   RustStreamSink<String> dco_decode_StreamSink_String_Sse(dynamic raw);
 
   @protected
@@ -42,16 +49,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   StartConfig dco_decode_box_autoadd_start_config(dynamic raw);
 
   @protected
+  BundleFile dco_decode_bundle_file(dynamic raw);
+
+  @protected
   Device dco_decode_device(dynamic raw);
 
   @protected
   HistoryItem dco_decode_history_item(dynamic raw);
 
   @protected
+  int dco_decode_i_32(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
+  PlatformInt64 dco_decode_isize(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<BundleFile> dco_decode_list_bundle_file(dynamic raw);
 
   @protected
   List<Device> dco_decode_list_device(dynamic raw);
@@ -105,7 +124,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  BigInt dco_decode_usize(dynamic raw);
+
+  @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+
+  @protected
+  Object sse_decode_DartOpaque(SseDeserializer deserializer);
 
   @protected
   RustStreamSink<String> sse_decode_StreamSink_String_Sse(
@@ -125,16 +150,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   StartConfig sse_decode_box_autoadd_start_config(SseDeserializer deserializer);
 
   @protected
+  BundleFile sse_decode_bundle_file(SseDeserializer deserializer);
+
+  @protected
   Device sse_decode_device(SseDeserializer deserializer);
 
   @protected
   HistoryItem sse_decode_history_item(SseDeserializer deserializer);
 
   @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
+  PlatformInt64 sse_decode_isize(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<BundleFile> sse_decode_list_bundle_file(SseDeserializer deserializer);
 
   @protected
   List<Device> sse_decode_list_device(SseDeserializer deserializer);
@@ -188,13 +225,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
+  BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_DartFn_Inputs_String_Output_i_32_AnyhowException(
+    FutureOr<int> Function(String) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_DartOpaque(Object self, SseSerializer serializer);
 
   @protected
   void sse_encode_StreamSink_String_Sse(
@@ -221,16 +267,31 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_bundle_file(BundleFile self, SseSerializer serializer);
+
+  @protected
   void sse_encode_device(Device self, SseSerializer serializer);
 
   @protected
   void sse_encode_history_item(HistoryItem self, SseSerializer serializer);
 
   @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_isize(PlatformInt64 self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_bundle_file(
+    List<BundleFile> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_device(List<Device> self, SseSerializer serializer);
@@ -293,7 +354,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
+  void sse_encode_usize(BigInt self, SseSerializer serializer);
 }
 
 // Section: wire_class

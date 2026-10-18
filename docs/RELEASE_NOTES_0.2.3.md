@@ -8,6 +8,15 @@ Fixes "Send app" from 0.2.2 and adds "Clone apps". Please update from 0.2.2.
 - **App data access never started in 0.2.2.** The embedded Shizuku server needs the separate Shizuku
   app and quit without it. VegamShare now starts its own small helper through Wireless debugging.
 - **Pairing failed on Android 16** (blocked internal TLS API); it now uses the public API.
+- **Send app did not work end to end in 0.2.2:** game data was never sent, the APKs landed loose in
+  `Download/VegamShare`, and the received app was not installed. Now:
+  - an app arrives as one folder (`apk/`, `data/`, `obb/`);
+  - `Android/data` and OBB are streamed straight from the sender through the helper, so a big game
+    (e.g. MLBB with ~11 GB in `Android/data`) needs no extra free space on the sending phone; caches are
+    left out;
+  - the receiver installs the app (base + split APKs) through the helper without extra prompts, then
+    moves the data into `Android/data` / `Android/obb`, and removes the received folder when done;
+  - OBB files go to `Android/obb/<app>` (0.2.2 used a wrong folder).
 
 ## What's new
 - **Clone apps (Android):** tap **Clone apps** on the Devices screen to clone a game into the phone's

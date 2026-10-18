@@ -242,12 +242,18 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           return;
         }
       }
+      final messenger = _messengerKey.currentState;
+      messenger?.showSnackBar(SnackBar(content: Text(tr('app_installing', {'label': n.label})), behavior: SnackBarBehavior.floating));
       try {
-        await writeReceivedApp(n.packageName, n.receivedDir);
-        if (!Platform.isAndroid) return;
-        final messenger = _messengerKey.currentState;
+        final r = (await writeReceivedApp(n.packageName, n.receivedDir)).split('|');
+        if (!Platform.isAndroid || r.first != 'installed') return;
+        final errors = int.tryParse(r.elementAtOrNull(3) ?? '') ?? 0;
         messenger?.showSnackBar(SnackBar(
-          content: Text(tr('app_installing', {'label': n.label})),
+          content: Text(tr(errors == 0 ? 'app_installed' : 'app_installed_errors', {
+            'label': n.label,
+            'files': '${(int.tryParse(r[1]) ?? 0) + (int.tryParse(r[2]) ?? 0)}',
+            'errors': '$errors',
+          })),
           behavior: SnackBarBehavior.floating,
         ));
       } catch (e) {

@@ -102,6 +102,10 @@
             android:multiprocess="false"
             tools:ignore="ExportedContentProvider" />
 
+        <receiver
+            android:name=".InstallResultReceiver"
+            android:exported="false" />
+
         <service
             android:name=".PairingService"
             android:exported="false"
