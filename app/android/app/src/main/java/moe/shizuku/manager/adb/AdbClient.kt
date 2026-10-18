@@ -43,6 +43,8 @@ class AdbClient(private val host: String, private val port: Int, private val key
     fun connect() {
         socket = Socket(host, port)
         socket.tcpNoDelay = true
+        // A port that is not adbd must not hang the caller.
+        socket.soTimeout = 10_000
         plainInputStream = DataInputStream(socket.getInputStream())
         plainOutputStream = DataOutputStream(socket.getOutputStream())
 

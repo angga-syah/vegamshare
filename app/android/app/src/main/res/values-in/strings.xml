@@ -4,7 +4,7 @@
     <string name="cancel">Batal</string>
     <string name="setup_title">Setup</string>
     <string name="setup_step1_title">Siapkan Debug Nirkabel</string>
-    <string name="setup_step1_body">VegamShare menjalankan helper lewat Debug nirkabel (Android 11+). Tanpa PC atau root.\n\n1. Ketuk Mulai. Halaman Debug nirkabel terbuka. (Opsi developer belum ada? Pengaturan → Tentang HP → ketuk Nomor build 7 kali.)\n\n2. Aktifkan Debug nirkabel lalu ketuk \"Pasangkan perangkat dengan kode pairing\".\n\n3. Hafalkan 6 angkanya, tarik turun notifikasi VegamShare, ketuk Masukkan kode lalu ketik. VegamShare akan terbuka lagi sendiri.\n\nSetelah restart HP cukup aktifkan Debug nirkabel, tanpa kode.</string>
+    <string name="setup_step1_body">VegamShare menjalankan helper lewat Debug nirkabel (Android 11+). Tanpa PC atau root.\n\n1. Ketuk Mulai. Halaman Debug nirkabel terbuka. (Opsi developer belum ada? Pengaturan → Tentang HP → ketuk Nomor build 7 kali.)\n\n2. Aktifkan Debug nirkabel lalu ketuk \"Pasangkan perangkat dengan kode pairing\".\n\n3. Ketik 6 angkanya di keypad melayang (atau di notifikasi VegamShare). VegamShare akan terbuka lagi sendiri.\n\nSetelah restart HP cukup aktifkan Debug nirkabel, tanpa kode.</string>
     <string name="setup_step1_button">Mulai</string>
     <string name="setup_step2_title">Masukkan Kode Pairing</string>
     <string name="setup_step2_body">Pakai layar terpisah (split screen) agar kode pairing Debug nirkabel tetap terbuka, lalu masukkan IP:port dan kode 6 digit yang tampil di sana.</string>
@@ -108,7 +108,7 @@
     <string name="install_incompatible">App di HP ini ditandatangani berbeda (sumber lain). Hapus dulu, lalu coba lagi.</string>
     <string name="install_abi">Prosesor HP ini tidak bisa menjalankan versi app yang dikirim.</string>
     <string name="install_storage">Ruang penyimpanan HP ini tidak cukup.</string>
-    <string name="keypad_hint">Ketik 6 angka kode yang tampil di bawah</string>
+    <string name="keypad_hint">Ketik 6 angka kode di Pengaturan. Seret baris kode untuk memindah panel ini.</string>
     <string name="overlay_title">Keypad melayang</string>
     <string name="overlay_body">Izinkan VegamShare tampil di atas aplikasi lain, maka keypad angka kecil muncul di atas layar Pengaturan sementara kode pairing tetap terlihat di bawahnya. Tidak perlu menghafal.\n\nTanpa izin ini, kode diketik di notifikasi VegamShare.</string>
     <string name="overlay_allow">Izinkan</string>

@@ -6,7 +6,7 @@
     <string name="cancel">Cancel</string>
     <string name="setup_title">Setup</string>
     <string name="setup_step1_title">Set up Wireless debugging</string>
-    <string name="setup_step1_body">VegamShare starts a helper through Wireless debugging (Android 11+). No PC or root.\n\n1. Tap Start. Wireless debugging opens. (No Developer options? Settings → About phone → tap Build number 7 times.)\n\n2. Turn on Wireless debugging and tap \"Pair device with pairing code\".\n\n3. Remember the 6 digits, pull down the VegamShare notification, tap Enter code and type them. VegamShare comes back by itself.\n\nAfter a restart just turn Wireless debugging on; no code needed.</string>
+    <string name="setup_step1_body">VegamShare starts a helper through Wireless debugging (Android 11+). No PC or root.\n\n1. Tap Start. Wireless debugging opens. (No Developer options? Settings → About phone → tap Build number 7 times.)\n\n2. Turn on Wireless debugging and tap \"Pair device with pairing code\".\n\n3. Type the 6 digits on the floating number pad (or in the VegamShare notification). VegamShare comes back by itself.\n\nAfter a restart just turn Wireless debugging on; no code needed.</string>
     <string name="setup_step1_button">Start</string>
     <string name="setup_step2_title">Enter Pairing Code</string>
     <string name="setup_step2_body">Use split screen so the Wireless debugging pairing code stays open, then enter the IP:port and 6-digit code shown there.</string>
@@ -111,7 +111,7 @@
     <string name="install_incompatible">The app on this phone is signed differently (another source). Uninstall it first, then try again.</string>
     <string name="install_abi">This phone\'s processor cannot run the app version that was sent.</string>
     <string name="install_storage">Not enough free space on this phone.</string>
-    <string name="keypad_hint">Type the 6-digit code shown below</string>
+    <string name="keypad_hint">Type the 6-digit code shown in Settings. Drag the code line to move this pad.</string>
     <string name="overlay_title">Floating number pad</string>
     <string name="overlay_body">Allow VegamShare to display over other apps, and a small number pad appears at the top of Settings while the pairing code stays visible below it. Nothing to remember.\n\nWithout it, the code is typed into the VegamShare notification.</string>
     <string name="overlay_allow">Allow</string>

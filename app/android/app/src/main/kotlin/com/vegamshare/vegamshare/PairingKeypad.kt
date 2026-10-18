@@ -31,20 +31,20 @@ class PairingKeypad(
 
     val showing get() = root != null
 
+    private val prefs = context.getSharedPreferences("keypad", Context.MODE_PRIVATE)
+    private val params = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.WRAP_CONTENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSLUCENT,
+    ).apply { gravity = Gravity.TOP }
+
     fun show(): Boolean {
         if (root != null) return true
         if (!Settings.canDrawOverlays(context)) return false
         root = build()
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP
-            y = dp(28)
-        }
+        params.y = prefs.getInt(KEY_Y, dp(28))
         return runCatching { wm.addView(root, params) }.isSuccess.also { if (!it) root = null }
     }
 
@@ -78,19 +78,45 @@ class PairingKeypad(
             setPadding(dp(12), 0, dp(12), 0)
             addView(box, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         }
-        status = text(context.getString(R.string.keypad_hint), 14f)
-        digits = text("", 28f).apply { letterSpacing = 0.3f; gravity = Gravity.CENTER }
+        status = text(context.getString(R.string.keypad_hint), 13f)
+        digits = text("", 24f).apply { letterSpacing = 0.25f }
         box.addView(status)
-        box.addView(digits)
-        for (row in listOf("12345", "67890")) {
-            box.addView(LinearLayout(context).apply { row.forEach { c -> addView(key(c.toString()) { press(c) }, weight()) } })
-        }
+        // Code, backspace and close on one line; drag this line to move the pad.
         box.addView(LinearLayout(context).apply {
-            addView(key("⌫") { if (!locked && code.isNotEmpty()) { code.setLength(code.length - 1); render() } }, weight())
-            addView(key(context.getString(R.string.cancel)) { hide(); onClose() }, weight())
+            gravity = Gravity.CENTER_VERTICAL
+            addView(digits, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(key("⌫") { if (!locked && code.isNotEmpty()) { code.setLength(code.length - 1); render() } }, LinearLayout.LayoutParams(dp(56), dp(44)))
+            addView(key("✕") { hide(); onClose() }, LinearLayout.LayoutParams(dp(56), dp(44)))
+            setOnTouchListener(dragger())
         })
+        box.addView(LinearLayout(context).apply { "1234567890".forEach { c -> addView(key(c.toString()) { press(c) }, weight()) } })
         render()
         return outer
+    }
+
+    /** Moves the pad up or down with the finger and remembers where it was left. */
+    private fun dragger() = object : View.OnTouchListener {
+        private var startY = 0f
+        private var startParam = 0
+
+        override fun onTouch(v: View, e: android.view.MotionEvent): Boolean {
+            when (e.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    startY = e.rawY
+                    startParam = params.y
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    val max = context.resources.displayMetrics.heightPixels - (root?.height ?: 0)
+                    params.y = (startParam + (e.rawY - startY).toInt()).coerceIn(0, maxOf(0, max))
+                    root?.let { runCatching { wm.updateViewLayout(it, params) } }
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    prefs.edit().putInt(KEY_Y, params.y).apply()
+                    v.performClick()
+                }
+            }
+            return true
+        }
     }
 
     private fun press(c: Char) {
@@ -117,11 +143,20 @@ class PairingKeypad(
     private fun key(label: String, onClick: () -> Unit) = Button(context).apply {
         text = label
         isAllCaps = false
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+        minWidth = 0
+        minimumWidth = 0
+        minHeight = 0
+        minimumHeight = 0
+        setPadding(0, 0, 0, 0)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
         setOnClickListener { onClick() }
     }
 
-    private fun weight() = LinearLayout.LayoutParams(0, dp(52), 1f)
+    private fun weight() = LinearLayout.LayoutParams(0, dp(48), 1f).apply { setMargins(dp(1), 0, dp(1), 0) }
 
     private fun dp(v: Int) = (v * context.resources.displayMetrics.density).toInt()
+
+    private companion object {
+        const val KEY_Y = "y"
+    }
 }
