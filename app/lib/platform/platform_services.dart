@@ -353,6 +353,87 @@ Future<void> quitDesktop() async {
   await windowManager.destroy();
 }
 
+// ---------------------------------------------------------------- Shizuku / Send App (Android)
+
+class InstalledAppInfo {
+  InstalledAppInfo({required this.packageName, required this.label, required this.apkPath, required this.splitApkPaths});
+  final String packageName;
+  final String label;
+  final String apkPath;
+  final List<String> splitApkPaths;
+}
+
+/// Whether Wireless Debugging (Android 11+) is available on this device.
+Future<bool> shizukuAvailable() async {
+  if (!Platform.isAndroid) return false;
+  try {
+    return await _native.invokeMethod<bool>('shizukuAvailable') ?? false;
+  } catch (_) { return false; }
+}
+
+/// Whether the Shizuku privileged service is currently running.
+Future<bool> shizukuRunning() async {
+  if (!Platform.isAndroid) return false;
+  try {
+    return await _native.invokeMethod<bool>('shizukuRunning') ?? false;
+  } catch (_) { return false; }
+}
+
+/// Opens the EmbeddedSetupActivity (pair + start Shizuku via Wireless Debugging).
+Future<void> openShizukuSetup() async {
+  if (!Platform.isAndroid) return;
+  await _native.invokeMethod('openShizukuSetup');
+}
+
+/// Lists all user-installed apps on this device.
+Future<List<InstalledAppInfo>> listUserApps() async {
+  if (!Platform.isAndroid) return [];
+  try {
+    final raw = await _native.invokeListMethod<Map>('listUserApps') ?? [];
+    return raw.map((m) {
+      return InstalledAppInfo(
+        packageName: m['packageName'] as String,
+        label: m['label'] as String,
+        apkPath: m['apkPath'] as String,
+        splitApkPaths: (m['splitApkPaths'] as List?)?.cast<String>() ?? [],
+      );
+    }).toList();
+  } catch (_) { return []; }
+}
+
+class AppStagingResult {
+  AppStagingResult({required this.stagingDir, required this.directPaths});
+  /// Contains app_info.json + data/ (Android/data files staged via Shizuku).
+  final String stagingDir;
+  /// APK + OBB paths — send these directly without staging to save storage.
+  final List<String> directPaths;
+}
+
+/// Stages Android/data into [stagingDir] and returns APK+OBB paths directly.
+/// Avoids copying large OBB files (can be several GB) to a temp location.
+Future<AppStagingResult> stageAppFiles(String packageName, String stagingDir) async {
+  final raw = await _native.invokeMapMethod<String, dynamic>('stageAppFiles', {
+    'packageName': packageName,
+    'stagingDir': stagingDir,
+  });
+  return AppStagingResult(
+    stagingDir: raw?['stagingDir'] as String? ?? stagingDir,
+    directPaths: (raw?['directPaths'] as List?)?.cast<String>() ?? [],
+  );
+}
+
+/// On the receiver: installs APK and writes Android/data + OBB from [receivedDir].
+/// [receivedDir] must contain apk/, data/, obb/ subdirs (as staged by the sender).
+Future<void> writeReceivedApp(String packageName, String receivedDir) async {
+  if (!Platform.isAndroid) return;
+  await _native.invokeMethod('writeReceivedApp', {
+    'packageName': packageName,
+    'receivedDir': receivedDir,
+  });
+}
+
+// ---------------------------------------------------------------- Paths
+
 /// Opens a folder (or the folder containing a file) in the system UI.
 Future<void> revealPath(String path) async {
   if (Platform.isWindows) {

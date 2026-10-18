@@ -60,6 +60,11 @@ android {
             }
         }
     }
+
+    buildFeatures {
+        aidl = true
+        buildConfig = true
+    }
 }
 
 kotlin {
@@ -70,6 +75,14 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.80")
+    implementation("androidx.appcompat:appcompat:1.8.0")
+    implementation("com.google.android.material:material:1.14.0")
 }
 
 // Never ship a release signed with the public debug key by accident. Checked

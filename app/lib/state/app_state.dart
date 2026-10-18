@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -75,6 +76,13 @@ class ReplaceCandidate {
   final List<core.Device> old;
 }
 
+class AppReceiveNotice {
+  AppReceiveNotice(this.packageName, this.label, this.receivedDir);
+  final String packageName;
+  final String label;
+  final String receivedDir;
+}
+
 class FinishedNotice {
   FinishedNotice(this.id, this.outgoing, this.peer, this.status, this.error, this.errorKind, this.errorDetail, this.location);
   final String id;
@@ -113,6 +121,9 @@ class AppState extends ChangeNotifier {
   final _offerClosed = StreamController<String>.broadcast();
   final _finished = StreamController<FinishedNotice>.broadcast();
   final _pairRequests = StreamController<PairRequest>.broadcast();
+  /// Emitted when a received transfer contains an app bundle ready to install.
+  final _appReceived = StreamController<AppReceiveNotice>.broadcast();
+  Stream<AppReceiveNotice> get appReceived => _appReceived.stream;
   final _pairClosed = StreamController<String>.broadcast();
   Stream<PairRequest> get pairRequests => _pairRequests.stream;
   Stream<String> get pairRequestClosed => _pairClosed.stream;
@@ -275,9 +286,26 @@ class AppState extends ChangeNotifier {
       case 'transfer_finished':
         final id = e['transfer_id'] as String;
         transfers.remove(id);
-        _finished.add(FinishedNotice(id, e['direction'] == 'send', e['peer'], e['status'], e['error'], e['error_kind'], e['error_detail'], e['location']));
+        final notice = FinishedNotice(id, e['direction'] == 'send', e['peer'], e['status'], e['error'], e['error_kind'], e['error_detail'], e['location']);
+        _finished.add(notice);
+        if (!notice.outgoing && notice.status == 'completed' && notice.location != null && Platform.isAndroid) {
+          _checkAppReceived(notice.location!);
+        }
         refreshHistory();
     }
+  }
+
+  void _checkAppReceived(String location) {
+    final meta = File('$location/app_info.json');
+    if (!meta.existsSync()) return;
+    try {
+      final json = jsonDecode(meta.readAsStringSync()) as Map<String, dynamic>;
+      final pkg = json['packageName'] as String? ?? '';
+      final label = json['label'] as String? ?? pkg;
+      if (pkg.isNotEmpty) {
+        _appReceived.add(AppReceiveNotice(pkg, label, location));
+      }
+    } catch (_) {}
   }
 
   List<core.HistoryItem> get resumable =>

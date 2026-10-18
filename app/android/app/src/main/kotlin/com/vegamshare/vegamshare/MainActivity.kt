@@ -17,6 +17,7 @@ import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import rikka.shizuku.Shizuku
 import java.io.File
 
 class MainActivity : FlutterActivity() {
@@ -142,6 +143,167 @@ class MainActivity : FlutterActivity() {
                         dartReady = true
                         result.success(pendingShared.toList())
                         pendingShared.clear()
+                    }
+                    // ---- Shizuku embedded setup ----------------------------------------
+                    "shizukuAvailable" -> result.success(EmbeddedServer.isAvailable())
+                    "shizukuRunning" -> result.success(runCatching { Shizuku.pingBinder() }.getOrDefault(false))
+                    "openShizukuSetup" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            startActivity(Intent(this@MainActivity, EmbeddedSetupActivity::class.java))
+                            result.success(null)
+                        } else {
+                            result.error("unsupported", "Requires Android 11+", null)
+                        }
+                    }
+                    // ---- Stage app files for sending ------------------------------------
+                    "stageAppFiles" -> {
+                        val pkg = call.argument<String>("packageName")
+                        val stagingPath = call.argument<String>("stagingDir")
+                        if (pkg.isNullOrEmpty() || stagingPath.isNullOrEmpty()) {
+                            result.error("bad_args", "packageName and stagingDir required", null)
+                        } else {
+                            Thread {
+                                try {
+                                    val stagingDir = java.io.File(stagingPath).apply { mkdirs() }
+                                    val res = AppSendManager.prepareForSend(this@MainActivity, pkg, stagingDir)
+                                    // Return {"stagingDir": "...", "directPaths": [...]}
+                                    main.post { result.success(res) }
+                                } catch (e: Exception) {
+                                    main.post { result.error("stage_failed", e.message, null) }
+                                }
+                            }.start()
+                        }
+                    }
+                    // ---- Install received app -------------------------------------------
+                    // receivedDir has flat structure:
+                    //   *.apk          — APK file(s) to install
+                    //   *.obb          — OBB file(s) → goes to Android/obb/<pkg>/
+                    //   data/          — Android/data files → written via Shizuku
+                    //   app_info.json  — metadata (packageName, label, hasObb)
+                    "writeReceivedApp" -> {
+                        val pkg = call.argument<String>("packageName")
+                        val receivedDir = call.argument<String>("receivedDir")
+                        if (pkg.isNullOrEmpty() || receivedDir.isNullOrEmpty()) {
+                            result.error("bad_args", "packageName and receivedDir required", null)
+                        } else {
+                            Thread {
+                                try {
+                                    val base = java.io.File(receivedDir)
+
+                                    // APK files are directly in receivedDir
+                                    val apkFiles = (base.listFiles() ?: emptyArray())
+                                        .filter { it.name.endsWith(".apk") }
+                                    if (apkFiles.isNotEmpty()) {
+                                        AppReceiveManager.installApk(this@MainActivity, apkFiles)
+                                    }
+
+                                    // OBB files are directly in receivedDir
+                                    val obbFiles = (base.listFiles() ?: emptyArray())
+                                        .filter { it.name.endsWith(".obb") }
+                                    if (obbFiles.isNotEmpty()) {
+                                        val obbMap = obbFiles.associate { it.name to it }
+                                        AppReceiveManager.writeObbFiles(this@MainActivity, pkg, obbMap)
+                                    }
+
+                                    // Android/data is in data/ subdir
+                                    val dataDir = java.io.File(base, "data")
+                                    if (dataDir.isDirectory) {
+                                        val dataMap = mutableMapOf<String, java.io.File>()
+                                        dataDir.walkTopDown().forEach { f ->
+                                            if (f.isFile) dataMap[f.relativeTo(dataDir).path] = f
+                                        }
+                                        if (dataMap.isNotEmpty()) {
+                                            AppReceiveManager.writeDataViaPriv(pkg, dataMap)
+                                        }
+                                    }
+
+                                    main.post { result.success(null) }
+                                } catch (e: Exception) {
+                                    main.post { result.error("install_failed", e.message, null) }
+                                }
+                            }.start()
+                        }
+                    }
+                    // ---- App sender --------------------------------------------------------
+                    "listUserApps" -> Thread {
+                        val apps = AppSendManager.listUserApps(this@MainActivity)
+                        val list = apps.map { app ->
+                            mapOf(
+                                "packageName" to app.packageName,
+                                "label" to app.label,
+                                "apkPath" to app.apkPath,
+                                "splitApkPaths" to app.splitApkPaths,
+                            )
+                        }
+                        main.post { result.success(list) }
+                    }.start()
+                    "collectAppPaths" -> {
+                        val pkg = call.argument<String>("packageName")
+                        if (pkg.isNullOrEmpty()) {
+                            result.error("bad_args", "packageName required", null)
+                        } else {
+                            Thread {
+                                try {
+                                    val paths = AppSendManager.collectPaths(this@MainActivity, pkg)
+                                    val map = mapOf(
+                                        "packageName" to paths.packageName,
+                                        "apkPaths" to paths.apkPaths,
+                                        "obbFiles" to paths.obbFiles,
+                                        "dataFiles" to paths.dataFiles,
+                                    )
+                                    main.post { result.success(map) }
+                                } catch (e: Exception) {
+                                    main.post { result.error("collect_failed", e.message, null) }
+                                }
+                            }.start()
+                        }
+                    }
+                    // ---- App receiver -----------------------------------------------------
+                    "installApk" -> {
+                        val apkPaths = call.argument<List<String>>("apkPaths")
+                        if (apkPaths.isNullOrEmpty()) {
+                            result.error("bad_args", "apkPaths required", null)
+                        } else {
+                            Thread {
+                                try {
+                                    AppReceiveManager.installApk(
+                                        this@MainActivity,
+                                        apkPaths.map { java.io.File(it) },
+                                    )
+                                    main.post { result.success(null) }
+                                } catch (e: Exception) {
+                                    main.post { result.error("install_failed", e.message, null) }
+                                }
+                            }.start()
+                        }
+                    }
+                    "writeDataFiles" -> {
+                        val pkg = call.argument<String>("packageName")
+                        @Suppress("UNCHECKED_CAST")
+                        val fileMap = call.argument<Map<String, String>>("files")
+                        if (pkg.isNullOrEmpty() || fileMap == null) {
+                            result.error("bad_args", "packageName and files required", null)
+                        } else {
+                            Thread {
+                                val mapped = fileMap.mapValues { (_, v) -> java.io.File(v) }
+                                val count = AppReceiveManager.writeDataViaPriv(pkg, mapped)
+                                main.post { result.success(count) }
+                            }.start()
+                        }
+                    }
+                    "writeObbFiles" -> {
+                        val pkg = call.argument<String>("packageName")
+                        @Suppress("UNCHECKED_CAST")
+                        val fileMap = call.argument<Map<String, String>>("files")
+                        if (pkg.isNullOrEmpty() || fileMap == null) {
+                            result.error("bad_args", "packageName and files required", null)
+                        } else {
+                            Thread {
+                                val mapped = fileMap.mapValues { (_, v) -> java.io.File(v) }
+                                val count = AppReceiveManager.writeObbFiles(this@MainActivity, pkg, mapped)
+                                main.post { result.success(count) }
+                            }.start()
+                        }
                     }
                     else -> result.notImplemented()
                 }

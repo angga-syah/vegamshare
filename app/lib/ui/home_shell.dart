@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'dart:io';
+
 import '../main.dart' show appState;
 import '../platform/platform_services.dart';
 import '../src/rust/api/vegam.dart' as core;
@@ -38,6 +40,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       if (ctx != null && ctx.mounted) Navigator.pop(ctx);
     }));
     _subs.add(appState.finished.listen(_onFinished));
+    _subs.add(appState.appReceived.listen(_showAppReceived));
     _subs.add(appState.pairRequests.listen(_showPairRequest));
     _subs.add(appState.replaceCandidates.listen(_offerReplace));
     _subs.add(wifiLost.stream.listen(_onWifiLost));
@@ -189,6 +192,39 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(text), action: action, behavior: SnackBarBehavior.floating));
+  }
+
+  void _showAppReceived(AppReceiveNotice n) {
+    final ctx = _messengerKey.currentContext ?? context;
+    showDialog<bool>(
+      context: ctx,
+      builder: (dctx) => AlertDialog(
+        icon: const Icon(Icons.android),
+        title: Text(tr('app_received_title')),
+        content: Text(tr('app_received_body', {'label': n.label, 'pkg': n.packageName})),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, false), child: Text(tr('later'))),
+          FilledButton(onPressed: () => Navigator.pop(dctx, true), child: Text(tr('install'))),
+        ],
+      ),
+    ).then((install) async {
+      if (install != true) return;
+      try {
+        await writeReceivedApp(n.packageName, n.receivedDir);
+        if (!Platform.isAndroid) return;
+        final messenger = _messengerKey.currentState;
+        messenger?.showSnackBar(SnackBar(
+          content: Text(tr('app_installing', {'label': n.label})),
+          behavior: SnackBarBehavior.floating,
+        ));
+      } catch (e) {
+        final messenger = _messengerKey.currentState;
+        messenger?.showSnackBar(SnackBar(
+          content: Text(tr('app_install_failed', {'error': e.toString()})),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    });
   }
 
   Future<void> _chooseDeviceFor(List<String> paths) async {

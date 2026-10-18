@@ -24,6 +24,11 @@
         tools:replace="android:maxSdkVersion" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
+    <!-- Install received APKs -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- List all installed apps for the "send app" picker -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
     <!-- Scanning a pairing QR code (optional hardware) -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -73,6 +78,26 @@
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
+
+        <activity
+            android:name=".EmbeddedSetupActivity"
+            android:exported="false"
+            android:label="@string/setup_title" />
+
+        <!--
+            Two authorities on the same ShizukuProvider:
+            • ${applicationId}.shizuku  – the Shizuku API library uses this to bind the client
+            • moe.shizuku.privileged.api.shizuku – the embedded server always sends UserService
+              binders to this authority; registering it here means binders land directly in
+              VegamShare without a separate Shizuku app installed.
+        -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku;moe.shizuku.privileged.api.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
         <meta-data
             android:name="flutterEmbedding"

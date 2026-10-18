@@ -9,6 +9,7 @@ import '../util/format.dart';
 import '../util/l10n.dart';
 import 'common.dart';
 import 'history_page.dart';
+import 'send_app_page.dart';
 
 class DevicePage extends StatefulWidget {
   const DevicePage({super.key, required this.fingerprint});
@@ -124,6 +125,17 @@ class _DevicePageState extends State<DevicePage> {
                   ),
                 ),
               ]),
+              if (Platform.isAndroid) ...[
+                const SizedBox(height: 12),
+                FilledButton.tonalIcon(
+                  style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => SendAppPage(device: d)),
+                  ),
+                  icon: const Icon(Icons.android),
+                  label: Text(tr('send_app')),
+                ),
+              ],
               if (Platform.isWindows) ...[
                 const SizedBox(height: 16),
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [

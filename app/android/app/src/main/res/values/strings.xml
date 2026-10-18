@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">VegamShare</string>
+
+    <!-- Setup wizard (Shizuku / Wireless Debugging) -->
+    <string name="setup_title">Setup</string>
+    <string name="setup_step1_title">Enable Wireless Debugging</string>
+    <string name="setup_step1_body">VegamShare uses Wireless Debugging (Android 11+) to start a privileged helper that can access Android/data — no PC or root needed.\n\n1. Go to Settings → Developer options.\n   (To unlock: Settings → About phone → tap Build number 7 times.)\n\n2. Enable Wireless debugging.\n\n3. Tap "Pair device with pairing code".\n\nLeave the Wireless debugging screen open and tap Continue.</string>
+    <string name="setup_step1_button">Continue</string>
+    <string name="setup_step2_title">Enter Pairing Code</string>
+    <string name="setup_step2_body">In Wireless debugging → "Pair device with pairing code", you see an IP:port and a 6-digit code. Enter them below.</string>
+    <string name="setup_scanning">Scanning for pairing service…</string>
+    <string name="setup_port_detected">Detected pairing port: %d</string>
+    <string name="setup_enter_port">Enter the pairing port shown on your phone.</string>
+    <string name="setup_enter_code">Enter the 6-digit pairing code.</string>
+    <string name="setup_pairing_port_hint">Pairing port</string>
+    <string name="setup_pairing_code_hint">6-digit pairing code</string>
+    <string name="setup_step2_button">Pair &amp; Start</string>
+    <string name="setup_status_pairing">Pairing…</string>
+    <string name="setup_status_connecting">Connecting to ADB and starting server…</string>
+    <string name="setup_status_done">Server started. You can now send/receive apps with data!\n\nAfter a reboot you will need to run Setup again (Wireless Debugging only stays active until reboot).</string>
+    <string name="setup_status_error">Setup failed: %s</string>
+    <string name="setup_done">Done</string>
+    <string name="setup_retry">Try again</string>
+</resources>
