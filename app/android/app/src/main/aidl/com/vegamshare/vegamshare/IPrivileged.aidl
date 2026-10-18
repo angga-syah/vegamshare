@@ -51,6 +51,7 @@ interface IPrivileged {
     long archiveSize(String pkg, String kind) = 12;
     ParcelFileDescriptor openAppArchive(String pkg, String kind) = 13;
 
-    // Unpacks a received tar into that app folder. Returns "<files>|<errors>".
-    String extractIntoApp(String tarPath, String pkg, String kind) = 14;
+    // Unpacks a received tar into that app folder, reporting bytes read; cancel() stops it.
+    // Returns "<files>|<errors>", "CANCELLED|<files>|<errors>" or "ERR|<message>".
+    String extractIntoApp(String tarPath, String pkg, String kind, IProgress progress) = 14;
 }

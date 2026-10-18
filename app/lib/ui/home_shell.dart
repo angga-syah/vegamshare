@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'dart:io';
 
@@ -14,11 +15,16 @@ import 'add_device_page.dart' show formatCode;
 import 'common.dart';
 import 'devices_page.dart';
 import 'history_page.dart';
+import 'restore_dialog.dart';
 import 'settings_page.dart';
 import 'transfers_page.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
+
+  /// Pages pushed above the shell switch tabs through this (e.g. to Transfers).
+  static final tabRequest = ValueNotifier<int?>(null);
+  static const transfersTab = 1;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -33,6 +39,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    HomeShell.tabRequest.addListener(_onTabRequest);
     _subs.add(appState.offers.listen(_showOffer));
     _subs.add(appState.offerClosed.listen((id) {
       // The sender gave up or another decision path won: close the dialog.
@@ -57,8 +64,16 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     }
   }
 
+  void _onTabRequest() {
+    final tab = HomeShell.tabRequest.value;
+    if (tab == null || !mounted) return;
+    HomeShell.tabRequest.value = null;
+    setState(() => _tab = tab);
+  }
+
   @override
   void dispose() {
+    HomeShell.tabRequest.removeListener(_onTabRequest);
     WidgetsBinding.instance.removeObserver(this);
     for (final s in _subs) {
       s.cancel();
@@ -242,26 +257,32 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           return;
         }
       }
+      final c = _messengerKey.currentContext ?? context;
+      if (!c.mounted) return;
+      final outcome = await showDialog<Object?>(
+        context: c,
+        barrierDismissible: false,
+        builder: (_) => RestoreDialog(label: n.label, work: writeReceivedApp(n.packageName, n.receivedDir)),
+      );
       final messenger = _messengerKey.currentState;
-      messenger?.showSnackBar(SnackBar(content: Text(tr('app_installing', {'label': n.label})), behavior: SnackBarBehavior.floating));
-      try {
-        final r = (await writeReceivedApp(n.packageName, n.receivedDir)).split('|');
-        if (!Platform.isAndroid || r.first != 'installed') return;
-        final errors = int.tryParse(r.elementAtOrNull(3) ?? '') ?? 0;
-        messenger?.showSnackBar(SnackBar(
-          content: Text(tr(errors == 0 ? 'app_installed' : 'app_installed_errors', {
+      void say(String text, {SnackBarAction? action}) =>
+          messenger?.showSnackBar(SnackBar(content: Text(text), action: action, behavior: SnackBarBehavior.floating));
+      if (outcome is! String) {
+        final msg = outcome is PlatformException ? (outcome.message ?? outcome.code) : '$outcome';
+        say(tr('app_install_failed', {'error': msg}));
+        return;
+      }
+      final r = outcome.split('|');
+      switch (r.first) {
+        case 'installed':
+          final errors = int.tryParse(r.elementAtOrNull(3) ?? '') ?? 0;
+          say(tr(errors == 0 ? 'app_installed' : 'app_installed_errors', {
             'label': n.label,
             'files': '${(int.tryParse(r[1]) ?? 0) + (int.tryParse(r[2]) ?? 0)}',
             'errors': '$errors',
-          })),
-          behavior: SnackBarBehavior.floating,
-        ));
-      } catch (e) {
-        final messenger = _messengerKey.currentState;
-        messenger?.showSnackBar(SnackBar(
-          content: Text(tr('app_install_failed', {'error': e.toString()})),
-          behavior: SnackBarBehavior.floating,
-        ));
+          }));
+        case 'cancelled':
+          say(tr('restore_cancelled'), action: SnackBarAction(label: tr('retry'), onPressed: () => _showAppReceived(n)));
       }
     });
   }

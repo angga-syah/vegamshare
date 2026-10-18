@@ -101,4 +101,16 @@
     <string name="choosers_restore">Kembalikan yang pernah dihapus</string>
     <string name="choosers_done">Selesai. Buka file lagi lalu pilih Selalu.</string>
     <string name="error">Terjadi kesalahan: %s</string>
+    <string name="preparing_clone_title">Menyiapkan salinan</string>
+    <string name="preparing_clone_body">Membuka %1$s di ruang kedua sekali supaya Android membuat folder datanya. Nanti tertutup sendiri.\n\nJika HP menanyakan app mana yang dibuka, pilih yang bertanda salinan.</string>
+    <string name="install_downgrade">HP ini sudah punya versi app yang lebih baru. Hapus dulu, atau perbarui app di HP pengirim.</string>
+    <string name="install_restricted">HP memblokir instalasi lewat debugging. Di Xiaomi/POCO aktifkan Opsi developer → Instal via USB, lalu coba lagi.</string>
+    <string name="install_incompatible">App di HP ini ditandatangani berbeda (sumber lain). Hapus dulu, lalu coba lagi.</string>
+    <string name="install_abi">Prosesor HP ini tidak bisa menjalankan versi app yang dikirim.</string>
+    <string name="install_storage">Ruang penyimpanan HP ini tidak cukup.</string>
+    <string name="keypad_hint">Ketik 6 angka kode yang tampil di bawah</string>
+    <string name="overlay_title">Keypad melayang</string>
+    <string name="overlay_body">Izinkan VegamShare tampil di atas aplikasi lain, maka keypad angka kecil muncul di atas layar Pengaturan sementara kode pairing tetap terlihat di bawahnya. Tidak perlu menghafal.\n\nTanpa izin ini, kode diketik di notifikasi VegamShare.</string>
+    <string name="overlay_allow">Izinkan</string>
+    <string name="overlay_skip">Lewati</string>
 </resources>

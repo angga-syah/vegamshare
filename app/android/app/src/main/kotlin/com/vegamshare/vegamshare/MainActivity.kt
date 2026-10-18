@@ -206,7 +206,11 @@ class MainActivity : FlutterActivity() {
                         } else {
                             Thread {
                                 try {
-                                    val summary = AppReceiveManager.restore(this@MainActivity, pkg, java.io.File(receivedDir))
+                                    val summary = AppReceiveManager.restore(this@MainActivity, pkg, java.io.File(receivedDir)) { stage, done, total ->
+                                        main.post {
+                                            channel?.invokeMethod("restoreProgress", mapOf("stage" to stage, "done" to done, "total" to total))
+                                        }
+                                    }
                                     android.util.Log.i("AppReceiveManager", "restore $pkg: $summary")
                                     main.post { result.success(summary) }
                                 } catch (e: Exception) {
@@ -215,6 +219,10 @@ class MainActivity : FlutterActivity() {
                                 }
                             }.start()
                         }
+                    }
+                    "cancelRestore" -> {
+                        Thread { runCatching { Priv.service?.cancel() } }.start()
+                        result.success(null)
                     }
                     "listUserApps" -> Thread {
                         val apps = AppSendManager.listUserApps(this@MainActivity)

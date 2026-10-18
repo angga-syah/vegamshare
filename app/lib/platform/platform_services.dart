@@ -156,6 +156,10 @@ Future<void> initShareIntents() async {
   _native.setMethodCallHandler((call) async {
     if (call.method == 'sharedPaths') _deliver(List<String>.from(call.arguments as List));
     if (call.method == 'wifiLost') wifiLost.add(call.arguments as String);
+    if (call.method == 'restoreProgress') {
+      final m = call.arguments as Map;
+      restoreProgress.add(RestoreProgress(m['stage'] as String, m['done'] as int, m['total'] as int));
+    }
   });
   try {
     final initial = await _native.invokeListMethod<String>('takeSharedPaths');
@@ -435,6 +439,21 @@ Future<AppBundle> prepareAppBundle(String packageName) async {
 Future<void> registerAppFileOpener() async {
   if (!Platform.isAndroid) return;
   await core.setPrivOpener(open: (spec) async => await _native.invokeMethod<int>('openAppFile', spec) ?? -1);
+}
+
+/// A stage of installing a received app: install, prepare, data (bytes), obb (files).
+class RestoreProgress {
+  RestoreProgress(this.stage, this.done, this.total);
+  final String stage;
+  final int done;
+  final int total;
+}
+
+final StreamController<RestoreProgress> restoreProgress = StreamController<RestoreProgress>.broadcast();
+
+/// Stops restoring data; the received folder is kept so it can be tried again.
+Future<void> cancelRestore() async {
+  if (Platform.isAndroid) await _native.invokeMethod('cancelRestore');
 }
 
 /// On the receiver: installs the app from a received bundle folder, then moves its data in.

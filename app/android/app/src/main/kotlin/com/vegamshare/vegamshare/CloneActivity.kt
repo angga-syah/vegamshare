@@ -343,8 +343,51 @@ class CloneActivity : AppCompatActivity() {
             Priv.sh("am", "force-stop", "--user", t.id.toString(), app.pkg)
             val prepared = Priv.service!!.prepareTarget(app.pkg, t.id, app.appId)
             main.post {
-                if (prepared == 2) askToOpenClone(app, t) else runCopy(app, t)
+                if (prepared == 2) openCloneOnce(app, t) else runCopy(app, t)
             }
+        }
+    }
+
+    /**
+     * The clone's data folder only appears once the clone has run. Start it, wait for the
+     * folder, close it again and go on copying; fall back to asking the user if that fails.
+     */
+    private fun openCloneOnce(app: AppItem, t: Profile) {
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.preparing_clone_title)
+            .setMessage(getString(R.string.preparing_clone_body, app.label))
+            .setCancelable(false)
+            .show()
+        background {
+            val owner = (t.id * PER_USER_RANGE + app.appId).toString()
+            val dir = "/storage/emulated/${t.id}/Android/data/${app.pkg}"
+            var ready = false
+            if (launchIn(app.pkg, t.id)) {
+                val until = System.currentTimeMillis() + CLONE_START_WAIT_MS
+                while (!ready && System.currentTimeMillis() < until) {
+                    Thread.sleep(500)
+                    ready = Priv.sh("stat", "-c", "%u", dir).out.trim() == owner
+                }
+                Thread.sleep(1000)
+            }
+            Priv.sh("am", "force-stop", "--user", t.id.toString(), app.pkg)
+            closeCloneLeftovers(t.id)
+            main.post {
+                dialog.dismiss()
+                if (ready) runCopy(app, t) else askToOpenClone(app, t)
+            }
+        }
+    }
+
+    /** A permission prompt or app chooser of the clone can stay on screen after it is closed. */
+    private fun closeCloneLeftovers(user: Int) {
+        repeat(3) {
+            val focus = Priv.sh("dumpsys", "window").out.lineSequence().firstOrNull { "mCurrentFocus" in it }.orEmpty()
+            val ours = packageName in focus
+            val cloneWindow = " u$user " in focus || "intentresolver" in focus
+            if (ours || !cloneWindow) return
+            Priv.sh("input", "keyevent", "KEYCODE_BACK")
+            Thread.sleep(600)
         }
     }
 
@@ -553,5 +596,6 @@ class CloneActivity : AppCompatActivity() {
     private companion object {
         const val PER_USER_RANGE = 100000
         const val KEY_TARGET = "target_user"
+        const val CLONE_START_WAIT_MS = 30_000L
     }
 }

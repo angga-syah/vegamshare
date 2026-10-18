@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.net.Uri
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.view.View
 import android.widget.TextView
 import androidx.annotation.RequiresApi
@@ -59,7 +61,7 @@ class EmbeddedSetupActivity : AppCompatActivity() {
             ) {
                 requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFY)
             } else {
-                startNotificationPairing()
+                beginPairing()
             }
         }
         findViewById<MaterialButton>(R.id.step0Manual).setOnClickListener {
@@ -83,12 +85,17 @@ class EmbeddedSetupActivity : AppCompatActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_NOTIFY) {
-            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) startNotificationPairing() else showStep(1)
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) beginPairing() else showStep(1)
         }
     }
 
     override fun onResume() {
         super.onResume()
+        if (startAfterOverlayPrompt) {
+            startAfterOverlayPrompt = false
+            startNotificationPairing()
+            return
+        }
         if (Priv.service != null && step2.visibility != View.VISIBLE) {
             showStep(2)
             setupProgress.visibility = View.GONE
@@ -96,6 +103,28 @@ class EmbeddedSetupActivity : AppCompatActivity() {
             doneButton.visibility = View.VISIBLE
             retryButton.visibility = View.GONE
         }
+    }
+
+    private var startAfterOverlayPrompt = false
+
+    /**
+     * The floating number pad needs "Display over other apps"; without it the code is typed
+     * into the notification instead, so the user may skip this.
+     */
+    private fun beginPairing() {
+        if (Settings.canDrawOverlays(this)) {
+            startNotificationPairing()
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.overlay_title)
+            .setMessage(R.string.overlay_body)
+            .setNegativeButton(R.string.overlay_skip) { _, _ -> startNotificationPairing() }
+            .setPositiveButton(R.string.overlay_allow) { _, _ ->
+                startAfterOverlayPrompt = true
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            }
+            .show()
     }
 
     /** Pairing code goes into a notification; Settings opens on the Wireless debugging page. */

@@ -87,7 +87,7 @@ class PrivilegedService(private val appUid: Int) : IPrivileged.Stub() {
                     for (f in stack.removeLast().listFiles() ?: continue) {
                         if (isLink(f)) continue
                         if (f.isDirectory) stack.add(f)
-                        else if (f.isFile) out.append(f.length().toString()).append('\t').append(f.lastModified().toString())
+                        else if (f.isFile && f.canRead()) out.append(f.length().toString()).append('\t').append(f.lastModified().toString())
                             .append('\t').append(f.path.substring(base.path.length + 1)).append('\n')
                     }
                 }
@@ -115,7 +115,7 @@ class PrivilegedService(private val appUid: Int) : IPrivileged.Stub() {
                 if (isLink(f)) continue
                 val rel = f.path.substring(base.path.length + 1)
                 if (kind == "data" && (rel == "cache" || rel.startsWith("cache/"))) continue
-                if (f.isDirectory) stack.add(f) else if (f.isFile) items += Tar.Item(f, rel, f.length(), f.lastModified())
+                if (f.isDirectory) stack.add(f) else if (f.isFile && f.canRead()) items += Tar.Item(f, rel, f.length(), f.lastModified())
             }
         }
         items.sortBy { it.name }
@@ -138,14 +138,24 @@ class PrivilegedService(private val appUid: Int) : IPrivileged.Stub() {
         return read
     }
 
-    override fun extractIntoApp(tarPath: String, pkg: String, kind: String): String = try {
+    override fun extractIntoApp(tarPath: String, pkg: String, kind: String, progress: IProgress?): String = try {
         val tar = File(tarPath)
         require(tar.path.startsWith("/storage/emulated/0/") && !tarPath.contains("/../")) { "bad source" }
         val base = appFolder(pkg, kind)
+        cancelled = false
         var files = 0
         var errors = 0
-        FileInputStream(tar).buffered(1 shl 20).use { input ->
+        val total = tar.length()
+        var lastReport = 0L
+        val raw = FileInputStream(tar)
+        raw.buffered(1 shl 20).use { input ->
             Tar.read(input) { name, mtimeMs, data, _ ->
+                if (cancelled) throw CancelledException()
+                val now = System.currentTimeMillis()
+                if (now - lastReport > REPORT_EVERY_MS) {
+                    lastReport = now
+                    progress?.onProgress(raw.channel.position(), total, name.substringAfterLast('/'))
+                }
                 try {
                     val dst = inside(base, name)
                     ensureDir(dst.parentFile!!)
@@ -158,10 +168,15 @@ class PrivilegedService(private val appUid: Int) : IPrivileged.Stub() {
                 }
             }
         }
+        progress?.onProgress(total, total, "")
         "$files|$errors"
+    } catch (_: CancelledException) {
+        "CANCELLED"
     } catch (e: Exception) {
         "ERR|${e.message}"
     }
+
+    private class CancelledException : Exception()
 
     override fun moveIntoApp(srcPath: String, pkg: String, kind: String, relPath: String): String = try {
         val src = File(srcPath)
@@ -278,7 +293,7 @@ class PrivilegedService(private val appUid: Int) : IPrivileged.Stub() {
             when {
                 isLink(f) -> {}
                 f.isDirectory -> if (!skipFolder(f.name)) walk(f, out)
-                f.isFile -> if (f.length() >= LOOSE_FILE_MIN && !isMedia(f.name)) out += f
+                f.isFile -> if (f.length() >= LOOSE_FILE_MIN && !isMedia(f.name) && f.canRead()) out += f
             }
         }
         walk(root(user, "obb", pkg), out)
@@ -292,7 +307,7 @@ class PrivilegedService(private val appUid: Int) : IPrivileged.Stub() {
             val d = stack.removeLast()
             for (f in d.listFiles() ?: continue) {
                 if (isLink(f)) continue
-                if (f.isDirectory) stack.add(f) else if (f.isFile) out += f
+                if (f.isDirectory) stack.add(f) else if (f.isFile && f.canRead()) out += f
             }
         }
     }

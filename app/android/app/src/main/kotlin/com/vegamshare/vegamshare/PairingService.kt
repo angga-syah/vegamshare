@@ -10,7 +10,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.annotation.RequiresApi
 import moe.shizuku.manager.adb.AdbMdns
 
@@ -26,6 +28,8 @@ class PairingService : Service() {
     @Volatile private var port = -1
     @Volatile private var busy = false
     @Volatile private var stopped = false
+    private val main = Handler(Looper.getMainLooper())
+    private var keypad: PairingKeypad? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -39,6 +43,7 @@ class PairingService : Service() {
     }
 
     override fun onDestroy() {
+        keypad?.hide()
         mdns?.stop()
         super.onDestroy()
     }
@@ -57,6 +62,7 @@ class PairingService : Service() {
                     host = h
                     port = p
                     notify(build(getString(R.string.pair_found), withInput = true))
+                    main.post { showKeypad() }
                 }
             }.also { it.start() }
         }
@@ -79,7 +85,16 @@ class PairingService : Service() {
         }.start()
     }
 
+    /** The floating number pad, when "Display over other apps" is allowed. */
+    private fun showKeypad() {
+        val pad = keypad ?: PairingKeypad(this, onCode = { submitCode(it) }, onClose = {}).also { keypad = it }
+        if (!busy) pad.show()
+    }
+
+    private fun keypadStatus(text: String, error: Boolean) = main.post { keypad?.status(text, error) }
+
     private fun finishOk() {
+        main.post { keypad?.hide() }
         mdns?.stop()
         stopForeground(STOP_FOREGROUND_DETACH)
         notify(build(getString(R.string.pair_done), withInput = false, ongoing = false))
@@ -90,24 +105,32 @@ class PairingService : Service() {
     }
 
     private fun onReply(intent: Intent) {
-        val code = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_CODE)?.toString()?.trim().orEmpty()
+        submitCode(RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_CODE)?.toString()?.trim().orEmpty())
+    }
+
+    private fun submitCode(code: String) {
         if (code.isEmpty() || port == -1 || busy) return
         busy = true
         notify(build(getString(R.string.setup_status_pairing), withInput = false))
+        keypadStatus(getString(R.string.setup_status_pairing), error = false)
         Thread {
             try {
                 EmbeddedServer.pair(this, host, port, code)
                 notify(build(getString(R.string.setup_status_connecting), withInput = false))
+                keypadStatus(getString(R.string.setup_status_connecting), error = false)
                 EmbeddedServer.connectAndStart(this, host)
                 finishOk()
             } catch (e: Exception) {
                 busy = false
-                notify(build(getString(R.string.setup_status_error, e.message ?: e.javaClass.simpleName), withInput = true))
+                val msg = getString(R.string.setup_status_error, e.message ?: e.javaClass.simpleName)
+                notify(build(msg, withInput = true))
+                keypadStatus(msg, error = true)
             }
         }.start()
     }
 
     private fun stopAll() {
+        main.post { keypad?.hide() }
         stopped = true
         mdns?.stop()
         stopForeground(STOP_FOREGROUND_REMOVE)

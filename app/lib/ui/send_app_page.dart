@@ -4,6 +4,7 @@ import '../platform/platform_services.dart';
 import '../src/rust/api/vegam.dart' as core;
 import '../util/l10n.dart';
 import 'common.dart';
+import 'home_shell.dart';
 
 /// Shows a list of installed apps; user picks one, app is staged and sent.
 class SendAppPage extends StatefulWidget {
@@ -68,20 +69,49 @@ class _SendAppPageState extends State<SendAppPage> with WidgetsBindingObserver {
 
   Future<void> _send(InstalledAppInfo app) async {
     setState(() => _stagingPkg = app.packageName);
+    var cancelled = false;
+    BuildContext? dialogContext;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dctx) {
+        dialogContext = dctx;
+        return AlertDialog(
+          title: Text(tr('send_app_preparing', {'name': app.label})),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(tr('send_app_preparing_body')),
+            const SizedBox(height: 16),
+            const LinearProgressIndicator(),
+          ]),
+          actions: [
+            TextButton(
+              onPressed: () {
+                cancelled = true;
+                Navigator.pop(dctx);
+              },
+              child: Text(tr('cancel')),
+            ),
+          ],
+        );
+      },
+    );
     try {
-      // One folder (apk/, data/, obb/); data is read through the helper while sending.
+      // One folder (apk/, data.tar, obb/); data is read through the helper while sending.
       final bundle = await prepareAppBundle(app.packageName);
+      if (cancelled) return;
       await core.sendBundle(fingerprint: widget.device.fingerprint, root: bundle.root, files: bundle.files);
-
-      if (mounted) {
-        showSnack(context, tr('send_app_queued', {'name': app.label, 'device': widget.device.displayName}));
-        Navigator.of(context).pop();
-      }
+      if (!mounted) return;
+      showSnack(context, tr('send_app_queued', {'name': app.label, 'device': widget.device.displayName}));
+      // Progress, pause and stop live in the Transfer tab.
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      HomeShell.tabRequest.value = HomeShell.transfersTab;
     } catch (e) {
-      if (mounted) {
-        setState(() => _stagingPkg = null);
-        showSnack(context, tr('send_app_failed', {'error': e.toString()}));
-      }
+      if (!mounted || cancelled) return;
+      final d = dialogContext;
+      if (d != null && d.mounted) Navigator.pop(d);
+      showSnack(context, tr('send_app_failed', {'error': e.toString()}));
+    } finally {
+      if (mounted) setState(() => _stagingPkg = null);
     }
   }
 

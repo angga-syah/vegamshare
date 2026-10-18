@@ -104,4 +104,16 @@
     <string name="choosers_restore">Put back removed apps</string>
     <string name="choosers_done">Done. Open a file again and choose Always.</string>
     <string name="error">Something went wrong: %s</string>
+    <string name="preparing_clone_title">Preparing the clone</string>
+    <string name="preparing_clone_body">Starting %1$s in the second space once so Android creates its data folder. It closes again by itself.\n\nIf the phone asks which app to open, pick the one marked as the clone.</string>
+    <string name="install_downgrade">This phone already has a newer version of the app. Uninstall it first, or update the app on the sending phone.</string>
+    <string name="install_restricted">The phone blocks installing over debugging. On Xiaomi/POCO turn on Developer options → Install via USB, then try again.</string>
+    <string name="install_incompatible">The app on this phone is signed differently (another source). Uninstall it first, then try again.</string>
+    <string name="install_abi">This phone\'s processor cannot run the app version that was sent.</string>
+    <string name="install_storage">Not enough free space on this phone.</string>
+    <string name="keypad_hint">Type the 6-digit code shown below</string>
+    <string name="overlay_title">Floating number pad</string>
+    <string name="overlay_body">Allow VegamShare to display over other apps, and a small number pad appears at the top of Settings while the pairing code stays visible below it. Nothing to remember.\n\nWithout it, the code is typed into the VegamShare notification.</string>
+    <string name="overlay_allow">Allow</string>
+    <string name="overlay_skip">Skip</string>
 </resources>

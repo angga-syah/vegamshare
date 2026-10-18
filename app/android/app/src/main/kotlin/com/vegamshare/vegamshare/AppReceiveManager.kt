@@ -21,8 +21,16 @@ object AppReceiveManager {
     private const val TAG = "AppReceiveManager"
     const val ACTION_INSTALL = "com.vegamshare.vegamshare.INSTALL_COMPLETE"
 
-    /** Returns "installed|<data files>|<obb files>|<errors>" or "confirm" (user confirms the install). */
-    fun restore(context: Context, pkg: String, bundle: File): String {
+    /** Reports a stage ("install", "prepare", "data", "obb") and, for data/obb, done and total. */
+    fun interface Progress {
+        fun update(stage: String, done: Long, total: Long)
+    }
+
+    /**
+     * Returns "installed|<data files>|<obb files>|<errors>", "cancelled" (bundle kept for a
+     * retry) or "confirm" (no helper: the user confirms the install, data stays behind).
+     */
+    fun restore(context: Context, pkg: String, bundle: File, progress: Progress): String {
         val apks = File(bundle, "apk").listFiles { f -> f.isFile && f.name.endsWith(".apk") }
             ?.sortedBy { if (it.name == "base.apk") 0 else 1 }.orEmpty()
         require(apks.isNotEmpty()) { "no APK in ${bundle.name}" }
@@ -31,33 +39,62 @@ object AppReceiveManager {
             installWithInstaller(context, apks)
             return "confirm"
         }
-        installWithShell(apks)
+        progress.update("install", 0, 0)
+        installWithShell(context, apks)
 
         var errors = 0
         val appUid = context.packageManager.getApplicationInfo(pkg, 0).uid
         val data = File(bundle, "data")
         val dataTar = File(bundle, "data.tar")
         var dataMoved = 0
-        if (dataTar.isFile) {
+        if (dataTar.isFile || data.isDirectory) {
+            progress.update("prepare", 0, 0)
             prepareDataFolder(pkg, appUid)
-            val r = Priv.service!!.extractIntoApp(dataTar.path, pkg, "data").split('|')
-            if (r[0] == "ERR") {
-                errors++
-                Log.w(TAG, "extract: ${r.getOrNull(1)}")
-            } else {
-                dataMoved = r[0].toInt()
-                errors += r[1].toInt()
+        }
+        if (dataTar.isFile) {
+            val onBytes = object : IProgress.Stub() {
+                override fun onProgress(doneBytes: Long, totalBytes: Long, current: String?) =
+                    progress.update("data", doneBytes, totalBytes)
+            }
+            val r = Priv.service!!.extractIntoApp(dataTar.path, pkg, "data", onBytes).split('|')
+            when (r[0]) {
+                "CANCELLED" -> return "cancelled"
+                "ERR" -> {
+                    errors++
+                    Log.w(TAG, "extract: ${r.getOrNull(1)}")
+                }
+                else -> {
+                    dataMoved = r[0].toInt()
+                    errors += r[1].toInt()
+                }
             }
         } else if (data.isDirectory) {
-            prepareDataFolder(pkg, appUid)
-            dataMoved = moveAll(data, pkg, "data").also { errors += it.second }.first
+            dataMoved = moveAll(data, pkg, "data", progress).also { errors += it.second }.first
         }
-        val obbMoved = moveAll(File(bundle, "obb"), pkg, "obb").also { errors += it.second }.first
+        val obbMoved = moveAll(File(bundle, "obb"), pkg, "obb", progress).also { errors += it.second }.first
         if (errors == 0) bundle.deleteRecursively()
         return "installed|$dataMoved|$obbMoved|$errors"
     }
 
-    /** Silent install as the shell user; throws with the package manager's message on failure. */
+    /** Silent install as the shell user; throws with a readable message on failure. */
+    private fun installWithShell(context: Context, apks: List<File>) {
+        try {
+            installWithShell(apks)
+        } catch (e: IllegalStateException) {
+            val msg = e.message.orEmpty()
+            throw IllegalStateException(
+                when {
+                    "VERSION_DOWNGRADE" in msg -> context.getString(R.string.install_downgrade)
+                    "USER_RESTRICTED" in msg -> context.getString(R.string.install_restricted)
+                    "UPDATE_INCOMPATIBLE" in msg -> context.getString(R.string.install_incompatible)
+                    "NO_MATCHING_ABIS" in msg -> context.getString(R.string.install_abi)
+                    "INSUFFICIENT_STORAGE" in msg -> context.getString(R.string.install_storage)
+                    else -> msg
+                }
+            )
+        }
+    }
+
     private fun installWithShell(apks: List<File>) {
         val total = apks.sumOf { it.length() }
         val create = Priv.sh("cmd", "package", "install-create", "-r", "-S", total.toString())
@@ -99,12 +136,14 @@ object AppReceiveManager {
     }
 
     /** Returns moved files and errors. */
-    private fun moveAll(dir: File, pkg: String, kind: String): Pair<Int, Int> {
+    private fun moveAll(dir: File, pkg: String, kind: String, progress: Progress): Pair<Int, Int> {
         if (!dir.isDirectory) return 0 to 0
         val helper = Priv.service ?: return 0 to 1
         var moved = 0
         var errors = 0
-        dir.walkTopDown().filter { it.isFile }.forEach { f ->
+        val files = dir.walkTopDown().filter { it.isFile }.toList()
+        files.forEachIndexed { i, f ->
+            progress.update(kind, i.toLong(), files.size.toLong())
             val err = helper.moveIntoApp(f.path, pkg, kind, f.relativeTo(dir).invariantSeparatorsPath)
             if (err.isEmpty()) moved++ else {
                 errors++
