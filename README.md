@@ -18,9 +18,11 @@ Windows installer (`.exe`) and Android app (`.apk`).
 - **Resumes interrupted transfers:** if Wi-Fi drops, the transfer continues where it stopped. Every file
   is checked end to end with BLAKE3.
 - **No Wi-Fi needed:** an Android phone can create a temporary hotspot (no internet, no mobile data
-  used); the other phone scans the QR code and joins it automatically. A direct LAN cable between two
+  used); the other phone scans the QR code and joins it automatically, switching its Wi-Fi on if
+  needed. A direct LAN cable between two
   PCs works too.
 - **Encrypted:** QUIC / TLS 1.3. Devices verify each other's keys, and no data ever leaves your network.
+  The only internet request is the update check to api.github.com (manual, or daily if switched on).
 - **Battery friendly:** completely idle until you send something. It does no background scanning and
   makes no announcements on the network.
 - **Convenient:** drag & drop and Explorer *Send to* on Windows; *Share to VegamShare* from any Android
@@ -28,6 +30,11 @@ Windows installer (`.exe`) and Android app (`.apk`).
 - **Send apps with their data (Android):** send an installed app (APK + `Android/data` + OBB) to another
   phone, so a big game such as MLBB does not download again; the receiver installs it from VegamShare.
   Logins usually stay behind (they live in storage only root can read): sign in again on the other phone.
+- **WhatsApp files (Android):** documents, photos and videos WhatsApp saved, in two tabs as in
+  WhatsApp, newest first; view and send them in a few taps.
+- **Updates inside the app:** Settings → Check for updates fetches the new version from GitHub
+  Releases and installs it through the system installer, then deletes the download. An automatic
+  daily check can be switched on.
 - **Clone apps (Android):** clone a game into the phone's second space (Dual apps, App cloner, work
   profile, Secure Folder, Private space) together with its downloaded data.
 

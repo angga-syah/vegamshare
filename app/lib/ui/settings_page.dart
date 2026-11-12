@@ -9,6 +9,7 @@ import '../platform/platform_services.dart';
 import '../src/rust/api/vegam.dart' as core;
 import '../util/l10n.dart';
 import 'common.dart';
+import '../util/updater.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -190,6 +191,42 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                   title: Text(tr('addresses')),
                   subtitle: SelectableText(info.addresses.isEmpty ? '-' : info.addresses.join('\n')),
                 ),
+                if (Updater.supported)
+                  ListenableBuilder(
+                    listenable: updater,
+                    builder: (context, _) {
+                      final busy = updater.stage == UpdateStage.checking || updater.stage == UpdateStage.downloading;
+                      return Column(children: [
+                        ListTile(
+                          leading: busy
+                              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.system_update_outlined),
+                          title: Text(tr('update_check')),
+                          subtitle: Text(switch (updater.stage) {
+                            UpdateStage.checking => tr('update_checking'),
+                            UpdateStage.upToDate => tr('update_up_to_date', {'v': updater.installed}),
+                            UpdateStage.failed => tr('update_failed_short'),
+                            UpdateStage.available ||
+                            UpdateStage.downloading ||
+                            UpdateStage.needsPermission ||
+                            UpdateStage.installing =>
+                              tr('update_available_short', {'v': updater.info?.version ?? ''}),
+                            _ => tr('update_installed', {'v': updater.installed}),
+                          }),
+                          onTap: busy
+                              ? null
+                              : () => updater.stage == UpdateStage.available ? updater.offers.add(updater.info!) : updater.checkNow(),
+                        ),
+                        SwitchListTile(
+                          secondary: const Icon(Icons.update),
+                          title: Text(tr('update_auto')),
+                          subtitle: Text(tr('update_auto_sub')),
+                          value: updater.autoCheck,
+                          onChanged: updater.setAutoCheck,
+                        ),
+                      ]);
+                    },
+                  ),
                 ListTile(
                   leading: const Icon(Icons.info_outline),
                   title: Text(tr('about')),

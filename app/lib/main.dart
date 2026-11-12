@@ -11,6 +11,7 @@ import 'src/rust/frb_generated.dart';
 import 'state/app_state.dart';
 import 'ui/home_shell.dart';
 import 'util/l10n.dart';
+import 'util/updater.dart';
 
 final appState = AppState();
 
@@ -23,6 +24,7 @@ Future<void> main(List<String> args) async {
   });
   await RustLib.init();
   await appState.loadPrefs();
+  await updater.init();
   await initDesktop(args, onQuit: _quit);
   runApp(const VegamShareApp());
 }

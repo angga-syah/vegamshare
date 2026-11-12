@@ -25,10 +25,12 @@ class HotspotPage extends StatefulWidget {
   State<HotspotPage> createState() => _HotspotPageState();
 }
 
-class _HotspotPageState extends State<HotspotPage> {
+class _HotspotPageState extends State<HotspotPage> with WidgetsBindingObserver {
   HotspotInfo? _hotspot;
   String? _qr;
   String? _error;
+  /// Error code that a settings screen fixes (tethering_on, location_off).
+  String? _fixable;
   bool _starting = true;
   Timer? _keepOpen;
   int _devicesSeen = 0;
@@ -45,6 +47,7 @@ class _HotspotPageState extends State<HotspotPage> {
       if (_hotspot != null) setState(() => _qr = hotspotQr(_hotspot!)); // QR tokens expire after 2 min
     });
     appState.addListener(_onState);
+    WidgetsBinding.instance.addObserver(this);
     _start();
   }
 
@@ -52,8 +55,20 @@ class _HotspotPageState extends State<HotspotPage> {
   void dispose() {
     _keepOpen?.cancel();
     appState.removeListener(_onState);
+    WidgetsBinding.instance.removeObserver(this);
     pairingScreenClosed();
     super.dispose();
+  }
+
+  /// Back from the hotspot or location settings: try again by itself.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _fixable != null && !_starting) _start();
+  }
+
+  Future<void> _fix() async {
+    if (_fixable == 'tethering_on') await openTetherSettings();
+    if (_fixable == 'location_off') await openLocationSettings();
   }
 
   void _onState() {
@@ -75,6 +90,7 @@ class _HotspotPageState extends State<HotspotPage> {
     setState(() {
       _starting = true;
       _error = null;
+      _fixable = null;
     });
     try {
       final before = appState.hotspot == null ? core.myInfo().addresses.toSet() : null;
@@ -93,7 +109,12 @@ class _HotspotPageState extends State<HotspotPage> {
         _qr = hotspotQr(h);
       });
     } on WifiLinkException catch (e) {
-      if (mounted) setState(() => _error = describeWifiError(e.code));
+      if (mounted) {
+        setState(() {
+          _error = describeWifiError(e.code);
+          _fixable = const {'tethering_on', 'location_off'}.contains(e.code) ? e.code : null;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = describeError(e));
     } finally {
@@ -126,7 +147,12 @@ class _HotspotPageState extends State<HotspotPage> {
             child: ListTile(leading: const Icon(Icons.wifi_off), title: Text(_error!)),
           ),
           const SizedBox(height: 8),
-          FilledButton.icon(onPressed: _start, icon: const Icon(Icons.refresh), label: Text(tr('retry'))),
+          if (_fixable != null) ...[
+            FilledButton.icon(onPressed: _fix, icon: const Icon(Icons.settings), label: Text(tr(_fixable == 'tethering_on' ? 'open_hotspot_settings' : 'open_location_settings'))),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(onPressed: _start, icon: const Icon(Icons.refresh), label: Text(tr('retry'))),
+          ] else
+            FilledButton.icon(onPressed: _start, icon: const Icon(Icons.refresh), label: Text(tr('retry'))),
         ],
         if (h != null && _qr != null) ...[
           Text(tr('hotspot_scan_hint'), style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
@@ -176,5 +202,7 @@ String describeWifiError(String code) => switch (code) {
       'unsupported' => tr('e_wifi_unsupported'),
       'join_failed' => tr('e_wifi_join_failed'),
       'busy' => tr('e_wifi_busy'),
+      'tethering_on' => tr('e_wifi_tethering_on'),
+      'wifi_off' => tr('e_wifi_off'),
       _ => tr('e_wifi_failed', {'code': code}),
     };

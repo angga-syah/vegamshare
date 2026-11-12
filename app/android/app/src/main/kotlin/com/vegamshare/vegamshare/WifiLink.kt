@@ -1,7 +1,13 @@
 package com.vegamshare.vegamshare
 
 import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -13,6 +19,7 @@ import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import java.net.Inet4Address
 
 /**
@@ -43,11 +50,111 @@ object WifiLink {
 
     fun currentHotspot(): Hotspot? = hotspot
 
+    /** Text of the ongoing "hotspot on" notification, localized by Dart. */
+    var notifyTitle: String = "VegamShare hotspot: {name}"
+    var notifyText: String = ""
+
+    fun wifiEnabled(context: Context): Boolean =
+        (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager).isWifiEnabled
+
+    /**
+     * Turns Wi-Fi on where Android still lets an app do it: directly up to
+     * Android 9, through the privileged helper when it runs. False means the
+     * user has to switch it on (Dart then opens the Wi-Fi panel).
+     */
+    @Suppress("DEPRECATION")
+    fun enableWifi(context: Context): Boolean {
+        val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        if (wifi.isWifiEnabled) return true
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && wifi.setWifiEnabled(true)) return true
+        if (Priv.service == null) return false
+        return try {
+            Priv.exec("svc", "wifi", "enable").ok
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** The quick Wi-Fi switch above the app (Android 10+), else Wi-Fi settings. */
+    fun openWifiPanel(context: Context) {
+        val action = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) Settings.Panel.ACTION_WIFI else Settings.ACTION_WIFI_SETTINGS
+        open(context, Intent(action))
+    }
+
+    /**
+     * The normal (tethering) hotspot is on. Android cannot run it next to
+     * our local-only hotspot, and apps are not allowed to switch it off.
+     */
+    fun tetheringOn(context: Context): Boolean {
+        val sticky = try {
+            context.applicationContext.registerReceiver(null, IntentFilter("android.net.wifi.WIFI_AP_STATE_CHANGED"))
+        } catch (_: Exception) {
+            null
+        } ?: return false
+        // WifiManager.WIFI_AP_STATE_ENABLING = 12, WIFI_AP_STATE_ENABLED = 13
+        return sticky.getIntExtra("wifi_state", 0) in 12..13
+    }
+
+    fun openTetherSettings(context: Context) {
+        val tether = Intent().setClassName("com.android.settings", "com.android.settings.TetherSettings")
+        if (!open(context, tether)) open(context, Intent(Settings.ACTION_WIRELESS_SETTINGS))
+    }
+
+    fun openLocationSettings(context: Context) {
+        open(context, Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+    }
+
+    private fun open(context: Context, intent: Intent): Boolean = try {
+        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (_: Exception) {
+        false
+    }
+
+    /**
+     * A local-only hotspot does not show up as "Hotspot" in quick settings,
+     * so an ongoing notification tells the user it is on.
+     */
+    private fun showNotification(context: Context, h: Hotspot) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Hotspot", NotificationManager.IMPORTANCE_LOW))
+        val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        val tap = launch?.let { PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT) }
+        val n = Notification.Builder(context, CHANNEL)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(notifyTitle.replace("{name}", h.ssid))
+            .setContentText(notifyText)
+            .setOngoing(true)
+            .setContentIntent(tap)
+            .build()
+        try {
+            nm.notify(NOTIFY_ID, n)
+        } catch (_: SecurityException) {
+            // Notifications not allowed: the banner in the app still shows it.
+        }
+    }
+
+    private fun hideNotification(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        context.getSystemService(NotificationManager::class.java).cancel(NOTIFY_ID)
+    }
+
+    private const val CHANNEL = "hotspot"
+    private const val NOTIFY_ID = 4710
+    /** WifiManager.LocalOnlyHotspotCallback.ERROR_INCOMPATIBLE_MODE */
+    private const val ERROR_INCOMPATIBLE_MODE = 3
+
     @SuppressLint("MissingPermission") // runtime permission is requested from Dart first
     fun startHotspot(context: Context, done: (Result<Hotspot>) -> Unit) {
         hotspot?.let { done(Result.success(it)); return }
         if (!hotspotSupported) {
             done(Result.failure(IllegalStateException("unsupported")))
+            return
+        }
+        val app = context.applicationContext
+        if (starting == null && tetheringOn(app)) {
+            done(Result.failure(IllegalStateException("tethering_on")))
             return
         }
         // A second caller while starting waits for the same result instead
@@ -72,17 +179,20 @@ object WifiLink {
                     }
                     reservation = res
                     hotspot = info
+                    showNotification(app, info)
                     reply(Result.success(info))
                 }
 
                 override fun onStopped() {
                     reservation = null
                     hotspot = null
+                    hideNotification(app)
                     onLost?.invoke("hotspot")
                 }
 
                 override fun onFailed(reason: Int) {
-                    reply(Result.failure(IllegalStateException("failed_$reason")))
+                    val code = if (reason == ERROR_INCOMPATIBLE_MODE || tetheringOn(app)) "tethering_on" else "failed_$reason"
+                    reply(Result.failure(IllegalStateException(code)))
                 }
             }, main)
         } catch (e: SecurityException) {
@@ -90,7 +200,7 @@ object WifiLink {
         } catch (e: IllegalStateException) {
             // Location is checked in Dart beforehand, so this means another
             // hotspot/tethering session or a pending request is in the way.
-            reply(Result.failure(IllegalStateException("busy")))
+            reply(Result.failure(IllegalStateException(if (tetheringOn(app)) "tethering_on" else "busy")))
         }
     }
 
@@ -107,7 +217,8 @@ object WifiLink {
         return Hotspot((c.SSID ?: return null).trim('"'), c.preSharedKey?.trim('"') ?: return null, false)
     }
 
-    fun stopHotspot() {
+    fun stopHotspot(context: Context) {
+        hideNotification(context.applicationContext)
         reservation?.close()
         reservation = null
         hotspot = null
@@ -123,6 +234,8 @@ object WifiLink {
     @Suppress("DEPRECATION")
     fun join(context: Context, ssid: String, passphrase: String, wpa3: Boolean, done: (Result<String?>) -> Unit) {
         leave(context)
+        // One phone cannot run our hotspot and join another one.
+        if (hotspot != null) stopHotspot(context)
         val app = context.applicationContext
         var replied = false
         fun reply(r: Result<String?>) {

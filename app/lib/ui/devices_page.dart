@@ -25,6 +25,12 @@ class DevicesPage extends StatelessWidget {
         title: Text(tr('app_name')),
         actions: [
           if (Platform.isAndroid)
+            IconButton(
+              tooltip: tr('wa_title'),
+              icon: const Icon(Icons.chat_outlined),
+              onPressed: () async => deliverPaths(await pickWhatsApp(context)),
+            ),
+          if (Platform.isAndroid)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: TextButton.icon(

@@ -18,6 +18,8 @@ import 'history_page.dart';
 import 'restore_dialog.dart';
 import 'settings_page.dart';
 import 'transfers_page.dart';
+import '../util/updater.dart';
+import 'update_dialog.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -57,6 +59,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       if (ctx != null && ctx.mounted) Navigator.pop(ctx);
     }));
     _subs.add(externalPaths.stream.listen(_chooseDeviceFor));
+    _subs.add(updater.offers.stream.listen((_) {
+      if (mounted) showUpdateDialog(context);
+    }));
+    // Once a day while the app is open; never in the background.
+    WidgetsBinding.instance.addPostFrameCallback((_) => updater.autoCheckIfDue());
     if (pendingExternalPaths.isNotEmpty) {
       final p = pendingExternalPaths;
       pendingExternalPaths = [];
@@ -86,6 +93,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
     appState.refreshPlatformState();
+    updater.onResume();
+    updater.autoCheckIfDue();
     final waiting = _appAwaitingSetup;
     if (waiting != null) {
       shizukuRunning().then((ok) {

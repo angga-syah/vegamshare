@@ -7,6 +7,7 @@ import '../src/rust/api/vegam.dart' as core;
 import '../util/l10n.dart';
 import 'add_device_page.dart';
 import 'file_browser_page.dart';
+import 'whatsapp_page.dart';
 
 IconData platformIcon(String platform) => switch (platform) {
       'android' => Icons.smartphone,
@@ -60,6 +61,10 @@ Future<List<String>> pickFiles(BuildContext context) async {
   final r = await FilePicker.platform.pickFiles(allowMultiple: true, lockParentWindow: true);
   return r?.paths.whereType<String>().toList() ?? [];
 }
+
+/// Files WhatsApp saved on this phone (Android).
+Future<List<String>> pickWhatsApp(BuildContext context) async =>
+    await Navigator.of(context).push<List<String>>(MaterialPageRoute(builder: (_) => const WhatsAppPage())) ?? [];
 
 Future<List<String>> pickFolder(BuildContext context) async {
   if (Platform.isAndroid) {

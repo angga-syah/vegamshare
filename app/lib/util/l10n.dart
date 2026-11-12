@@ -209,11 +209,75 @@ const Map<String, List<String>> _t = {
     'Hotspot tidak bisa dibuat karena hotspot/tethering lain sedang aktif. Matikan dulu, lalu coba lagi.',
     'Cannot create the hotspot while another hotspot/tethering is on. Turn it off and try again.'
   ],
-  'e_wifi_join_failed': ['Gagal bergabung ke hotspot. Pastikan Wi-Fi menyala dan dekat dengan HP pembuat hotspot.', 'Could not join the hotspot. Make sure Wi-Fi is on and you are near the hotspot phone.'],
+  'e_wifi_join_failed': ['Gagal bergabung ke hotspot. Dekatkan ke HP pembuat hotspot dan pastikan hotspotnya masih aktif, lalu pindai lagi.', 'Could not join the hotspot. Move closer to the hotspot phone, make sure its hotspot is still on, and scan again.'],
   'e_wifi_failed': [
     'Hotspot tidak bisa dibuat ({code}). Matikan hotspot/tethering lain yang sedang aktif, lalu coba lagi.',
     'Could not create the hotspot ({code}). Turn off any other hotspot/tethering and try again.'
   ],
+  'e_wifi_tethering_on': [
+    'Hotspot biasa (tethering) HP ini sedang menyala. Android tidak bisa menjalankannya bersamaan dengan hotspot VegamShare. Matikan di pengaturan hotspot; VegamShare mencoba lagi sendiri saat Anda kembali.',
+    'This phone\'s normal hotspot (tethering) is on. Android cannot run it together with the VegamShare hotspot. Turn it off in the hotspot settings; VegamShare tries again by itself when you come back.'
+  ],
+  'e_wifi_off': ['Wi-Fi belum menyala. Nyalakan Wi-Fi, lalu pindai QR lagi.', 'Wi-Fi is still off. Turn it on and scan the QR code again.'],
+  'open_hotspot_settings': ['Buka pengaturan hotspot', 'Open hotspot settings'],
+  'open_location_settings': ['Buka pengaturan lokasi', 'Open location settings'],
+  'wifi_turning_on': ['Menyalakan Wi-Fi…', 'Turning on Wi-Fi…'],
+  'wifi_turn_on_hint': ['Nyalakan Wi-Fi di panel yang muncul. Setelah itu tersambung sendiri.', 'Turn on Wi-Fi in the panel that opened. It connects by itself afterwards.'],
+  'hotspot_notice_title': ['Hotspot VegamShare aktif: {name}', 'VegamShare hotspot on: {name}'],
+  'hotspot_notice_text': [
+    'Hotspot khusus VegamShare, tanpa internet. Tidak tampil sebagai Hotspot di menu cepat.',
+    'VegamShare-only hotspot, no internet. It does not show as Hotspot in quick settings.'
+  ],
+  // WhatsApp files
+  'wa_title': ['File WhatsApp', 'WhatsApp files'],
+  'wa_button': ['File WhatsApp', 'WhatsApp files'],
+  'wa_search': ['Cari nama file', 'Search file name'],
+  'wa_docs': ['Dokumen', 'Documents'],
+  'wa_media': ['Foto & Video', 'Photos & videos'],
+  'wa_sent': ['Termasuk yang saya kirim', 'Include sent by me'],
+  'wa_sent_tag': ['terkirim', 'sent'],
+  'wa_none': [
+    'Tidak ada file WhatsApp di HP ini. File baru muncul di sini setelah diunduh di WhatsApp.',
+    'No WhatsApp files on this phone. Files show up here once they are downloaded in WhatsApp.'
+  ],
+  'wa_none_here': ['Tidak ada file yang cocok.', 'No matching files.'],
+  'wa_open_with': ['Buka dengan aplikasi lain', 'Open with another app'],
+  'wa_select': ['Pilih', 'Select'],
+  'send': ['Kirim', 'Send'],
+  'today': ['Hari ini', 'Today'],
+  'yesterday': ['Kemarin', 'Yesterday'],
+  // App updates
+  'update_check': ['Cek pembaruan', 'Check for updates'],
+  'update_checking': ['Memeriksa…', 'Checking…'],
+  'update_installed': ['Versi terpasang {v}', 'Installed version {v}'],
+  'update_up_to_date': ['Sudah versi terbaru ({v})', 'Up to date ({v})'],
+  'update_failed_short': ['Gagal memeriksa. Periksa koneksi internet.', 'Could not check. Check the internet connection.'],
+  'update_available_short': ['Versi {v} tersedia. Ketuk untuk memperbarui.', 'Version {v} is available. Tap to update.'],
+  'update_auto': ['Cek pembaruan otomatis', 'Check for updates automatically'],
+  'update_auto_sub': [
+    'Mati: cek hanya saat Anda menekan "Cek pembaruan". Nyala: sekali sehari saat aplikasi dibuka, hanya ke GitHub, tidak pernah di latar belakang.',
+    'Off: only when you tap "Check for updates". On: once a day when the app is opened, only to GitHub, never in the background.'
+  ],
+  'update_available_title': ['Versi baru {v}', 'New version {v}'],
+  'update_available_body': ['Terpasang {old}. Ukuran unduhan {size}.', 'Installed {old}. Download size {size}.'],
+  'update_now': ['Perbarui', 'Update'],
+  'update_downloading': ['Mengunduh {v}…', 'Downloading {v}…'],
+  'update_permission_title': ['Izinkan pemasangan', 'Allow installing'],
+  'update_permission_body': [
+    'Android perlu izin "Instal aplikasi tidak dikenal" untuk VegamShare (sekali saja). Aktifkan di layar yang terbuka, lalu kembali: pemasangan berlanjut sendiri.',
+    'Android needs "Install unknown apps" allowed for VegamShare (only once). Turn it on in the screen that opened, then come back: the install continues by itself.'
+  ],
+  'update_install': ['Pasang', 'Install'],
+  'update_install_again': ['Pasang lagi', 'Install again'],
+  'update_installing_title': ['Memasang {v}', 'Installing {v}'],
+  'update_installing_body': [
+    'Ikuti petunjuk penginstal sistem. VegamShare tertutup sebentar selama pembaruan; data dan perangkat tersimpan tetap ada.',
+    'Follow the system installer. VegamShare closes briefly during the update; your data and saved devices stay.'
+  ],
+  'update_failed_title': ['Pembaruan gagal', 'Update failed'],
+  'update_failed_check': ['Tidak bisa menghubungi GitHub. Periksa koneksi internet, atau unduh manual dari {url}', 'Could not reach GitHub. Check the internet connection, or download it from {url}'],
+  'update_failed_download': ['Unduhan gagal atau rusak. Coba lagi, atau unduh manual dari {url}', 'The download failed or is damaged. Try again, or download it from {url}'],
+  'update_failed_install': ['Penginstal tidak bisa dibuka. Unduh manual dari {url}', 'Could not open the installer. Download it from {url}'],
   'identity_changed_title': ['Pairing ulang diperlukan', 'Pair again'],
   'identity_changed_body': [
     'Di alamat terakhir {name} sekarang ada VegamShare dengan identitas lain (ID {id}). Biasanya karena aplikasinya diinstal ulang. Hapus {name} lalu pairing ulang?',

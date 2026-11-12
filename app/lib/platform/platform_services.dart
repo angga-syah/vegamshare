@@ -30,6 +30,10 @@ void _deliver(List<String> paths) {
   }
 }
 
+/// Paths picked inside the app with no device chosen yet: the home screen
+/// asks where to send them, as for "Share to".
+void deliverPaths(List<String> paths) => _deliver(paths);
+
 class Dirs {
   Dirs(this.data, this.downloads);
   final String data;
@@ -180,7 +184,7 @@ class HotspotInfo {
 }
 
 /// Thrown with a code the UI translates: permission, location_off,
-/// unsupported, failed_N, join_failed.
+/// unsupported, tethering_on, wifi_off, failed_N, join_failed.
 class WifiLinkException implements Exception {
   WifiLinkException(this.code);
   final String code;
@@ -212,6 +216,9 @@ Future<void> _ensureWifiPermission() async {
 Future<HotspotInfo> startHotspot() async {
   await _ensureWifiPermission();
   try {
+    await _native.invokeMethod('hotspotNotice', {'title': tr('hotspot_notice_title'), 'text': tr('hotspot_notice_text')});
+  } catch (_) {}
+  try {
     final m = await _native.invokeMapMethod<String, dynamic>('startHotspot');
     return HotspotInfo(m!['ssid'] as String, m['passphrase'] as String, m['wpa3'] as bool? ?? false);
   } on PlatformException catch (e) {
@@ -225,14 +232,47 @@ Future<void> stopHotspot() async {
 
 /// Joins the hotspot; returns its gateway address, which on a hotspot is
 /// the phone that created it (null if Android did not report one).
-Future<String?> joinWifi(String ssid, String passphrase, bool wpa3) async {
+Future<String?> joinWifi(String ssid, String passphrase, bool wpa3, {void Function(String status)? onStatus}) async {
   await _ensureWifiPermission();
+  await _ensureWifiOn(onStatus);
+  onStatus?.call(tr('joining_hotspot', {'name': ssid}));
   try {
     final m = await _native.invokeMapMethod<String, dynamic>('joinWifi', {'ssid': ssid, 'passphrase': passphrase, 'wpa3': wpa3});
     return m?['gateway'] as String?;
   } on PlatformException catch (e) {
     throw WifiLinkException(e.code);
   }
+}
+
+/// Joining needs Wi-Fi switched on. Android 10+ does not let apps do that,
+/// except through the privileged helper; otherwise the Wi-Fi panel opens
+/// and the join continues by itself as soon as the user flips the switch.
+Future<void> _ensureWifiOn(void Function(String status)? onStatus) async {
+  Future<bool> on() async => await _native.invokeMethod<bool>('wifiEnabled') ?? true;
+  if (await on()) return;
+  onStatus?.call(tr('wifi_turning_on'));
+  if (!(await _native.invokeMethod<bool>('enableWifi') ?? false)) {
+    onStatus?.call(tr('wifi_turn_on_hint'));
+    await _native.invokeMethod('openWifiPanel');
+  }
+  // Only while the user is joining: give up after a minute.
+  for (var i = 0; i < 120; i++) {
+    if (await on()) {
+      // The radio reports "on" a moment before it can connect.
+      await Future<void>.delayed(const Duration(seconds: 1));
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  }
+  throw WifiLinkException('wifi_off');
+}
+
+Future<void> openTetherSettings() async {
+  if (Platform.isAndroid) await _native.invokeMethod('openTetherSettings');
+}
+
+Future<void> openLocationSettings() async {
+  if (Platform.isAndroid) await _native.invokeMethod('openLocationSettings');
 }
 
 Future<void> leaveWifi() async {

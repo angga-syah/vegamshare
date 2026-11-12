@@ -154,7 +154,7 @@ object AppReceiveManager {
     }
 
     /** Without the helper: the system installer asks the user to confirm. */
-    private fun installWithInstaller(context: Context, apks: List<File>) {
+    fun installWithInstaller(context: Context, apks: List<File>) {
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setInstallReason(PackageManager.INSTALL_REASON_USER)

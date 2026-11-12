@@ -127,14 +127,30 @@ class _DevicePageState extends State<DevicePage> {
               ]),
               if (Platform.isAndroid) ...[
                 const SizedBox(height: 12),
-                FilledButton.tonalIcon(
-                  style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => SendAppPage(device: d)),
+                Row(children: [
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      onPressed: () async {
+                        final paths = await pickWhatsApp(context);
+                        if (context.mounted) await sendToDevice(context, d, paths);
+                      },
+                      icon: const Icon(Icons.chat_outlined),
+                      label: Text(tr('wa_button')),
+                    ),
                   ),
-                  icon: const Icon(Icons.android),
-                  label: Text(tr('send_app')),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => SendAppPage(device: d)),
+                      ),
+                      icon: const Icon(Icons.android),
+                      label: Text(tr('send_app')),
+                    ),
+                  ),
+                ]),
               ],
               if (Platform.isWindows) ...[
                 const SizedBox(height: 16),

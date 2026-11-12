@@ -30,6 +30,7 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
     'Movies': Icons.movie,
     'Music': Icons.music_note,
     'Documents': Icons.description,
+    'Android/media/com.whatsapp/WhatsApp/Media': Icons.chat_outlined,
   };
 
   @override
@@ -95,7 +96,10 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
                 for (final s in _shortcuts.entries)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: ActionChip(avatar: Icon(s.value, size: 18), label: Text(s.key), onPressed: () => _load('$_root/${s.key}')),
+                    child: ActionChip(
+                        avatar: Icon(s.value, size: 18),
+                        label: Text(s.key.startsWith('Android/') ? 'WhatsApp' : s.key),
+                        onPressed: () => _load('$_root/${s.key}')),
                   ),
               ]),
             ),

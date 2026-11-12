@@ -106,8 +106,55 @@ class MainActivity : FlutterActivity() {
                         )
                     }
                     "stopHotspot" -> {
-                        WifiLink.stopHotspot()
+                        WifiLink.stopHotspot(this@MainActivity)
                         result.success(null)
+                    }
+                    "hotspotNotice" -> {
+                        call.argument<String>("title")?.let { WifiLink.notifyTitle = it }
+                        call.argument<String>("text")?.let { WifiLink.notifyText = it }
+                        result.success(null)
+                    }
+                    "wifiEnabled" -> result.success(WifiLink.wifiEnabled(this@MainActivity))
+                    // The helper call blocks on binder; keep it off the main thread.
+                    "enableWifi" -> Thread {
+                        val ok = WifiLink.enableWifi(this@MainActivity)
+                        main.post { result.success(ok) }
+                    }.start()
+                    "openWifiPanel" -> {
+                        WifiLink.openWifiPanel(this@MainActivity)
+                        result.success(null)
+                    }
+                    "openTetherSettings" -> {
+                        WifiLink.openTetherSettings(this@MainActivity)
+                        result.success(null)
+                    }
+                    "openLocationSettings" -> {
+                        WifiLink.openLocationSettings(this@MainActivity)
+                        result.success(null)
+                    }
+                    // ---- App update downloaded from GitHub Releases ----------------------
+                    // "permission": Android first needs "install unknown apps" for us
+                    // (settings opened); "ok": the system installer asks to confirm.
+                    "installUpdate" -> {
+                        val path = call.arguments as? String
+                        if (path == null || !File(path).isFile) {
+                            result.error("bad_args", "apk not found", null)
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+                            try {
+                                startActivity(Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+                            } catch (_: ActivityNotFoundException) {
+                            }
+                            result.success("permission")
+                        } else {
+                            Thread {
+                                try {
+                                    AppReceiveManager.installWithInstaller(this@MainActivity, listOf(File(path)))
+                                    main.post { result.success("ok") }
+                                } catch (e: Exception) {
+                                    main.post { result.error("install_failed", e.message, null) }
+                                }
+                            }.start()
+                        }
                     }
                     "joinWifi" -> {
                         val ssid = call.argument<String>("ssid")

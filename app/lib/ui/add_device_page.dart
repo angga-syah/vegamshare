@@ -93,7 +93,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
       final pass = q['wp'];
       if (ssid != null && pass != null) {
         status.value = tr('joining_hotspot', {'name': ssid});
-        final gateway = await joinWifi(ssid, pass, q['wt'] == '3');
+        final gateway = await joinWifi(ssid, pass, q['wt'] == '3', onStatus: (s) => status.value = s);
         await core.rebindNetwork();
         // On a hotspot the gateway is the phone that created it: try it
         // first, whatever addresses the QR listed.
