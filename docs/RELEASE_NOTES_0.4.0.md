@@ -34,10 +34,9 @@ no longer needs you to switch Wi-Fi or tethering yourself.
   updates arrive in the app.
 
 ## Download
-| Platform | File |
-|---|---|
-| Windows 10/11 (x64) | [VegamShare-Setup-0.4.0.exe](https://github.com/angga-syah/vegamshare/releases/download/v0.4.0/VegamShare-Setup-0.4.0.exe) |
-| Android 7.0+ (arm64, armv7, x86_64) | [VegamShare-0.4.0.apk](https://github.com/angga-syah/vegamshare/releases/download/v0.4.0/VegamShare-0.4.0.apk) |
-| Checksums | [SHA256SUMS.txt](https://github.com/angga-syah/vegamshare/releases/download/v0.4.0/SHA256SUMS.txt) |
+| Platform | File | Size | Notes |
+|:--|:--|--:|:--|
+| **Windows** 10 / 11 | [VegamShare-Setup-0.4.0.exe](https://github.com/angga-syah/vegamshare/releases/download/v0.4.0/VegamShare-Setup-0.4.0.exe) | 12.7 MB | 64-bit installer |
+| **Android** 7.0+ | [VegamShare-0.4.0.apk](https://github.com/angga-syah/vegamshare/releases/download/v0.4.0/VegamShare-0.4.0.apk) | 89.4 MB | arm64, armv7, x86_64 |
 
-The Windows installer is not code-signed yet, so SmartScreen may warn: *More info → Run anyway*.
+Checksums: [SHA256SUMS.txt](https://github.com/angga-syah/vegamshare/releases/download/v0.4.0/SHA256SUMS.txt). The Windows installer is not code-signed yet, so SmartScreen may warn: *More info → Run anyway*.
