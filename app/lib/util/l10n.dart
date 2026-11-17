@@ -243,6 +243,8 @@ const Map<String, List<String>> _t = {
   'wa_none_here': ['Tidak ada file yang cocok.', 'No matching files.'],
   'wa_open_with': ['Buka dengan aplikasi lain', 'Open with another app'],
   'wa_select': ['Pilih', 'Select'],
+  'wa_no_preview': ['Pratinjau tidak tersedia (file terkunci atau rusak).', 'No preview (the file is locked or damaged).'],
+  'wa_pages': ['{n} halaman', '{n} pages'],
   'send': ['Kirim', 'Send'],
   'today': ['Hari ini', 'Today'],
   'yesterday': ['Kemarin', 'Yesterday'],

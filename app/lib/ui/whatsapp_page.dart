@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
@@ -31,6 +32,35 @@ class WaFile {
   String get name => path.substring(path.lastIndexOf('/') + 1);
   String get ext => name.contains('.') ? name.substring(name.lastIndexOf('.') + 1).toLowerCase() : '';
   bool get isImage => _imageExt.contains(ext);
+  bool get isPdf => ext == 'pdf';
+  bool get isVideo => _videoExt.contains(ext);
+}
+
+const _videoExt = {'mp4', '3gp', 'mkv', 'webm', 'mov'};
+
+/// Thumbnails made natively, kept for this app run (bounded).
+final _thumbs = <String, Future<Uint8List?>>{};
+
+Future<Uint8List?> _thumb(WaFile f, int width) {
+  final key = '${f.path}|$width|${f.modified}';
+  if (_thumbs.length > 500) _thumbs.clear();
+  return _thumbs[key] ??= f.isPdf ? pdfPage(f.path, 0, width) : videoFrame(f.path, width);
+}
+
+/// First PDF page or a video frame; [fallback] while loading or when there is none.
+class _NativeThumb extends StatelessWidget {
+  const _NativeThumb({required this.file, required this.width, required this.fallback});
+  final WaFile file;
+  final int width;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
+        future: _thumb(file, width),
+        builder: (context, snap) => snap.data == null
+            ? fallback
+            : Image.memory(snap.data!, fit: BoxFit.cover, alignment: Alignment.topCenter, gaplessPlayback: true),
+      );
 }
 
 const _storage = '/storage/emulated/0';
@@ -178,6 +208,20 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
 
   void _tap(WaFile f) {
     if (_selected.isNotEmpty) return _toggle(f);
+    if (f.isPdf) {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => _PdfView(
+          file: f,
+          onSend: () {
+            Navigator.of(context)
+              ..pop()
+              ..pop([f.path]);
+          },
+          onSelect: () => _toggle(f),
+        ),
+      ));
+      return;
+    }
     if (!f.isImage) {
       OpenFilex.open(f.path); // documents, audio, video: the phone's own viewer
       return;
@@ -277,6 +321,7 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
       rows.add(f);
     }
     final scheme = Theme.of(context).colorScheme;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
@@ -294,7 +339,7 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
           final t = DateTime.fromMillisecondsSinceEpoch(f.modified);
           final selected = _selected.contains(f.path);
           return ListTile(
-            leading: SizedBox(width: 40, child: Icon(_docIcon(f.ext), size: 30, color: scheme.primary)),
+            leading: SizedBox(width: 48, height: 48, child: _docLeading(f, scheme, dpr)),
             title: Text(f.name, maxLines: 2, overflow: TextOverflow.ellipsis),
             subtitle: Text([
               formatBytes(f.size),
@@ -338,15 +383,18 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
                   cacheWidth: (130 * dpr).round(),
                   errorBuilder: (_, _, _) => ColoredBox(color: scheme.surfaceContainerHighest, child: const Icon(Icons.broken_image_outlined)),
                 )
-              else
-                ColoredBox(
-                  color: scheme.surfaceContainerHighest,
-                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(Icons.play_circle_outline, size: 36, color: scheme.onSurfaceVariant),
-                    const SizedBox(height: 4),
-                    Text(formatBytes(f.size), style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
-                  ]),
+              else ...[
+                _NativeThumb(
+                  file: f,
+                  width: (130 * dpr).round(),
+                  fallback: ColoredBox(color: scheme.surfaceContainerHighest),
                 ),
+                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  const Icon(Icons.play_circle_outline, size: 36, color: Colors.white, shadows: [Shadow(blurRadius: 4)]),
+                  const SizedBox(height: 4),
+                  Text(formatBytes(f.size), style: const TextStyle(fontSize: 11, color: Colors.white, shadows: [Shadow(blurRadius: 3)])),
+                ]),
+              ],
               if (selected) ColoredBox(color: scheme.primary.withValues(alpha: 0.35)),
               Positioned(
                 right: 4,
@@ -361,6 +409,18 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
           );
         },
       ),
+    );
+  }
+
+  /// Photos and PDFs show a small preview, everything else its type icon.
+  Widget _docLeading(WaFile f, ColorScheme scheme, double dpr) {
+    final icon = Center(child: Icon(_docIcon(f.ext), size: 30, color: scheme.primary));
+    if (!f.isImage && !f.isPdf) return icon;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: f.isImage
+          ? Image.file(File(f.path), fit: BoxFit.cover, cacheWidth: (48 * dpr).round(), errorBuilder: (_, _, _) => icon)
+          : _NativeThumb(file: f, width: (48 * dpr).round(), fallback: icon),
     );
   }
 
@@ -405,6 +465,96 @@ class _ImageView extends StatelessWidget {
       ),
       body: InteractiveViewer(maxScale: 6, child: Center(child: Image.file(File(file.path)))),
       floatingActionButton: FloatingActionButton.extended(onPressed: onSend, icon: const Icon(Icons.send), label: Text(tr('send'))),
+    );
+  }
+}
+
+/// Full PDF preview: pages rendered one by one as they scroll into view,
+/// each can be pinch-zoomed. Send or select it right from here.
+class _PdfView extends StatefulWidget {
+  const _PdfView({required this.file, required this.onSend, required this.onSelect});
+  final WaFile file;
+  final VoidCallback onSend;
+  final VoidCallback onSelect;
+
+  @override
+  State<_PdfView> createState() => _PdfViewState();
+}
+
+class _PdfViewState extends State<_PdfView> {
+  late final Future<int?> _count = pdfPageCount(widget.file.path);
+  final _pages = <int, Future<Uint8List?>>{};
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final width = (MediaQuery.sizeOf(context).width * MediaQuery.devicePixelRatioOf(context)).round().clamp(320, 1600);
+    return Scaffold(
+      backgroundColor: scheme.surfaceContainerHighest,
+      appBar: AppBar(
+        title: FutureBuilder<int?>(
+          future: _count,
+          builder: (context, snap) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(widget.file.name, style: const TextStyle(fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(
+              [formatBytes(widget.file.size), if (snap.data != null) tr('wa_pages', {'n': snap.data!})].join(' · '),
+              style: const TextStyle(fontSize: 12),
+            ),
+          ]),
+        ),
+        actions: [
+          IconButton(tooltip: tr('wa_open_with'), icon: const Icon(Icons.open_in_new), onPressed: () => OpenFilex.open(widget.file.path)),
+          IconButton(
+            tooltip: tr('wa_select'),
+            icon: const Icon(Icons.check_box_outlined),
+            onPressed: () {
+              widget.onSelect();
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
+      body: FutureBuilder<int?>(
+        future: _count,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+          final n = snap.data ?? 0;
+          if (n == 0) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(tr('wa_no_preview'), textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  FilledButton(onPressed: () => OpenFilex.open(widget.file.path), child: Text(tr('wa_open_with'))),
+                ]),
+              ),
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 96),
+            itemCount: n,
+            itemBuilder: (context, i) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: FutureBuilder<Uint8List?>(
+                future: _pages[i] ??= pdfPage(widget.file.path, i, width),
+                builder: (context, page) => page.data == null
+                    ? AspectRatio(
+                        aspectRatio: 1 / 1.414, // A4 until the page is drawn
+                        child: ColoredBox(
+                          color: Colors.white,
+                          child: page.connectionState == ConnectionState.done
+                              ? const Icon(Icons.broken_image_outlined)
+                              : const Center(child: CircularProgressIndicator()),
+                        ),
+                      )
+                    : InteractiveViewer(maxScale: 5, child: Image.memory(page.data!, gaplessPlayback: true)),
+              ),
+            ),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(onPressed: widget.onSend, icon: const Icon(Icons.send), label: Text(tr('send'))),
     );
   }
 }

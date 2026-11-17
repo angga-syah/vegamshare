@@ -1,8 +1,12 @@
 # VegamShare 0.4.1
 
-WhatsApp files open right away, and the Windows app can start with Windows.
+WhatsApp files open right away with previews, and the Windows app can start with Windows.
 
 ## What's new
+- **Previews in WhatsApp files (Android):** PDFs and photos in *Documents* show a thumbnail of
+  their first page or the photo itself, and videos in *Photos & videos* show a frame. Tap a PDF
+  to read all pages inside VegamShare (pinch to zoom), then send or select it from there.
+  Previews are made on the phone with Android's own PDF reader; nothing is uploaded.
 - **WhatsApp files open faster (Android):** the list fills in while the phone is still being
   scanned, newest first, instead of waiting for every file. Opening the screen again during the
   same session shows the last list at once and refreshes it in the background of that screen.

@@ -64,6 +64,31 @@ String platformName() => Platform.isAndroid ? 'android' : Platform.isWindows ? '
 
 const _native = MethodChannel('vegamshare/native');
 
+/// Previews for the WhatsApp screen (Android): number of PDF pages, a PDF
+/// page or a video frame as JPEG bytes. Null when there is no preview
+/// (encrypted PDF, unknown codec).
+Future<int?> pdfPageCount(String path) async {
+  if (!Platform.isAndroid) return null;
+  try {
+    return await _native.invokeMethod<int>('pdfPageCount', {'path': path});
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<Uint8List?> pdfPage(String path, int page, int width) => _preview('pdfPage', {'path': path, 'page': page, 'width': width});
+
+Future<Uint8List?> videoFrame(String path, int width) => _preview('videoFrame', {'path': path, 'width': width});
+
+Future<Uint8List?> _preview(String method, Map<String, Object> args) async {
+  if (!Platform.isAndroid) return null;
+  try {
+    return await _native.invokeMethod<Uint8List>(method, args);
+  } catch (_) {
+    return null;
+  }
+}
+
 /// The device model name, e.g. "Samsung SM-A546E", for a friendlier default.
 Future<String?> androidModelName() async {
   try {

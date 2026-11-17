@@ -283,6 +283,19 @@ class MainActivity : FlutterActivity() {
                         }
                         main.post { result.success(list) }
                     }.start()
+                    "pdfPageCount", "pdfPage", "videoFrame" -> Previews.executor.execute {
+                        val path = call.argument<String>("path")!!
+                        val width = call.argument<Int>("width") ?: 300
+                        val r = runCatching {
+                            when (call.method) {
+                                "pdfPageCount" -> Previews.pdfPageCount(path)
+                                "pdfPage" -> Previews.pdfPage(path, call.argument<Int>("page") ?: 0, width)
+                                else -> Previews.videoFrame(path, width)
+                            }
+                        }
+                        // No preview (encrypted PDF, odd codec) is not an error for the UI.
+                        main.post { result.success(r.getOrNull()) }
+                    }
                     else -> result.notImplemented()
                 }
             }
