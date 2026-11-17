@@ -3,7 +3,7 @@
 ; after:  flutter build windows --release   (in app\)
 
 #define AppName "VegamShare"
-#define AppVersion "0.4.0"
+#define AppVersion "0.4.1"
 #define AppExe "vegamshare.exe"
 #define BuildDir "..\app\build\windows\x64\runner\Release"
 
@@ -36,11 +36,18 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 [CustomMessages]
 id.SendTo=Tambahkan "VegamShare" ke menu Kirim ke (Send to) di Explorer
 en.SendTo=Add "VegamShare" to Explorer's Send to menu
+id.Startup=Jalankan VegamShare saat Windows mulai (di tray, siap menerima)
+en.Startup=Start VegamShare with Windows (in the tray, ready to receive)
 
-; "Start with Windows" is a toggle inside the app (Settings), not set here.
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 Name: "sendto"; Description: "{cm:SendTo}"
+Name: "startup"; Description: "{cm:Startup}"
+
+; Same value the app's "Start with Windows" toggle (launch_at_startup) writes,
+; so the toggle in Settings shows it as on and can turn it off again.
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#AppName}"; ValueData: "{app}\{#AppExe} --minimized"; Flags: uninsdeletevalue; Tasks: startup
 
 [Files]
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

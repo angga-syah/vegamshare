@@ -33,8 +33,11 @@ no longer needs you to switch Wi-Fi or tethering yourself.
 - **Windows:** run the new installer over 0.2.1; settings and saved devices are kept. From now on
   updates arrive in the app.
 
-## Downloads
-- `VegamShare-Setup-0.4.0.exe`: Windows 10/11 (x64). Not code-signed yet, so SmartScreen may warn:
-  *More info → Run anyway*.
-- `VegamShare-0.4.0.apk`: Android 7.0+ (arm64, armv7, x86_64).
-- `SHA256SUMS.txt`: checksums.
+## Download
+| Platform | File |
+|---|---|
+| Windows 10/11 (x64) | [VegamShare-Setup-0.4.0.exe](https://github.com/angga-syah/vegamshare/releases/download/v0.4.0/VegamShare-Setup-0.4.0.exe) |
+| Android 7.0+ (arm64, armv7, x86_64) | [VegamShare-0.4.0.apk](https://github.com/angga-syah/vegamshare/releases/download/v0.4.0/VegamShare-0.4.0.apk) |
+| Checksums | [SHA256SUMS.txt](https://github.com/angga-syah/vegamshare/releases/download/v0.4.0/SHA256SUMS.txt) |
+
+The Windows installer is not code-signed yet, so SmartScreen may warn: *More info → Run anyway*.

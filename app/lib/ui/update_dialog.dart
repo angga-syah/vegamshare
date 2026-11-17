@@ -112,10 +112,15 @@ class _UpdateDialog extends StatelessWidget {
 
 /// Release notes are Markdown with hard-wrapped lines; show them as plain
 /// text: headings and list items on their own lines, wrapped lines joined.
+/// The "Download" section (links for the GitHub page) is left out: the app
+/// downloads the right file itself.
 String _plain(String md) {
   final out = StringBuffer();
   var inParagraph = false;
+  var skip = false;
   for (final raw in md.replaceAll('\r\n', '\n').split('\n')) {
+    if (raw.startsWith('#')) skip = RegExp(r'^#+\s*downloads?\b', caseSensitive: false).hasMatch(raw);
+    if (skip) continue;
     final line = raw.trim().replaceAll('**', '').replaceAll('`', '').replaceAll('*', '');
     if (line.isEmpty) {
       if (out.isNotEmpty) out.write('\n\n');

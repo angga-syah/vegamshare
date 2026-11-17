@@ -54,14 +54,31 @@ WaTab? _tabOf(String folder) {
   };
 }
 
-/// Runs in a background isolate: WhatsApp folders can hold thousands of files.
-List<WaFile> _scan(List<String> roots) {
-  final out = <WaFile>[];
+/// Runs in a background isolate: WhatsApp folders can hold thousands of files,
+/// and each stat goes through Android's slow storage layer. Sends batches as
+/// it goes so the page fills in right away.
+void _scan(SendPort port) {
+  var batch = <WaFile>[];
+  var last = DateTime.now();
+  void flush() {
+    if (batch.isEmpty) return;
+    port.send(batch);
+    batch = <WaFile>[];
+    last = DateTime.now();
+  }
+
   final seen = <String>{};
+  final roots = _roots;
   for (final root in roots) {
     final dir = Directory(root);
-    if (!dir.existsSync() || !seen.add(dir.resolveSymbolicLinksSync())) continue;
-    for (final top in dir.listSync(followLinks: false)) {
+    final List<FileSystemEntity> tops;
+    try {
+      if (!dir.existsSync() || !seen.add(dir.resolveSymbolicLinksSync())) continue;
+      tops = dir.listSync(followLinks: false);
+    } catch (_) {
+      continue;
+    }
+    for (final top in tops) {
       if (top is! Directory) continue;
       final tab = _tabOf(top.path.substring(top.path.lastIndexOf('/') + 1));
       if (tab == null) continue;
@@ -75,15 +92,18 @@ List<WaFile> _scan(List<String> roots) {
           if (first == 'Private') continue;
           try {
             final st = e.statSync();
-            out.add(WaFile(e.path, st.size, st.modified.millisecondsSinceEpoch, tab, first == 'Sent'));
+            batch.add(WaFile(e.path, st.size, st.modified.millisecondsSinceEpoch, tab, first == 'Sent'));
+            if (DateTime.now().difference(last).inMilliseconds > 250) flush();
           } catch (_) {}
         }
       } catch (_) {}
     }
   }
-  out.sort((a, b) => b.modified.compareTo(a.modified));
-  return out;
+  flush();
 }
+
+/// Last scan, kept for this app run so reopening the page is instant.
+List<WaFile>? _cache;
 
 String _dayLabel(int ms) {
   final d = DateTime.fromMillisecondsSinceEpoch(ms);
@@ -108,19 +128,40 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
     _load();
   }
 
+  bool _scanning = false;
+
   Future<void> _load() async {
+    if (_scanning) return;
     if (!await hasStoragePermission()) {
-      setState(() => _permission = false);
+      if (mounted) setState(() => _permission = false);
       return;
     }
-    final files = await Isolate.run(() => _scan(_roots));
+    // Show the previous scan at once; the fresh one replaces it when done.
+    final fresh = <WaFile>[];
+    final port = ReceivePort();
+    setState(() {
+      _permission = true;
+      _scanning = true;
+      _all = _cache;
+    });
+    // onExit sends null, also when the scan dies on an error.
+    await Isolate.spawn(_scan, port.sendPort, onExit: port.sendPort);
+    await for (final msg in port) {
+      if (msg == null) break;
+      fresh.addAll(msg as List<WaFile>);
+      if (_cache == null && mounted) setState(() => _all = _sorted(fresh));
+    }
+    port.close();
+    _cache = _sorted(fresh);
     if (mounted) {
       setState(() {
-        _permission = true;
-        _all = files;
+        _all = _cache;
+        _scanning = false;
       });
     }
   }
+
+  static List<WaFile> _sorted(List<WaFile> files) => [...files]..sort((a, b) => b.modified.compareTo(a.modified));
 
   Future<void> _grant() async {
     if (await requestStoragePermission()) _load();
@@ -195,6 +236,7 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
                 ),
               )
             : Column(children: [
+                if (_scanning && _all != null) const LinearProgressIndicator(minHeight: 2),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                   child: Align(
@@ -219,7 +261,9 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
     );
   }
 
-  Widget _empty() => EmptyHint(icon: Icons.chat_outlined, text: tr(_all!.isEmpty ? 'wa_none' : 'wa_none_here'));
+  Widget _empty() => _scanning
+      ? const Center(child: CircularProgressIndicator())
+      : EmptyHint(icon: Icons.chat_outlined, text: tr(_all!.isEmpty ? 'wa_none' : 'wa_none_here'));
 
   /// Documents and audio: a list with day headers, like WhatsApp's Docs tab.
   Widget _docs(BuildContext context) {
