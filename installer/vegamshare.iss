@@ -36,18 +36,35 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 [CustomMessages]
 id.SendTo=Tambahkan "VegamShare" ke menu Kirim ke (Send to) di Explorer
 en.SendTo=Add "VegamShare" to Explorer's Send to menu
+id.ContextMenu=Tambahkan "Bagikan dengan VegamShare" ke menu klik kanan Explorer
+en.ContextMenu=Add "Share with VegamShare" to Explorer's right-click menu
+id.ShareWith=Bagikan dengan VegamShare
+en.ShareWith=Share with VegamShare
 id.Startup=Jalankan VegamShare saat Windows mulai (di tray, siap menerima)
 en.Startup=Start VegamShare with Windows (in the tray, ready to receive)
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "sendto"; Description: "{cm:SendTo}"
+Name: "contextmenu"; Description: "{cm:ContextMenu}"
+Name: "sendto"; Description: "{cm:SendTo}"; Flags: unchecked
 Name: "startup"; Description: "{cm:Startup}"
 
 ; Same value the app's "Start with Windows" toggle (launch_at_startup) writes,
 ; so the toggle in Settings shows it as on and can turn it off again.
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#AppName}"; ValueData: "{app}\{#AppExe} --minimized"; Flags: uninsdeletevalue; Tasks: startup
+; Right-click "Share with VegamShare" on files and folders. Explorer starts one
+; process per selected item ("Player" lifts its 15-item cap); each hands its
+; path to the running window, which collects them into one share. HKA: for
+; all users, as setup runs as admin.
+Root: HKA; Subkey: "Software\Classes\*\shell\VegamShare"; ValueType: string; ValueName: ""; ValueData: "{cm:ShareWith}"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKA; Subkey: "Software\Classes\*\shell\VegamShare"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\{#AppExe}"",0"; Tasks: contextmenu
+Root: HKA; Subkey: "Software\Classes\*\shell\VegamShare"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Tasks: contextmenu
+Root: HKA; Subkey: "Software\Classes\*\shell\VegamShare\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: contextmenu
+Root: HKA; Subkey: "Software\Classes\Directory\shell\VegamShare"; ValueType: string; ValueName: ""; ValueData: "{cm:ShareWith}"; Flags: uninsdeletekey; Tasks: contextmenu
+Root: HKA; Subkey: "Software\Classes\Directory\shell\VegamShare"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\{#AppExe}"",0"; Tasks: contextmenu
+Root: HKA; Subkey: "Software\Classes\Directory\shell\VegamShare"; ValueType: string; ValueName: "MultiSelectModel"; ValueData: "Player"; Tasks: contextmenu
+Root: HKA; Subkey: "Software\Classes\Directory\shell\VegamShare\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: contextmenu
 
 [Files]
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

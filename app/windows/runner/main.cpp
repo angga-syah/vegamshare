@@ -17,7 +17,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // arguments to the running window and exits.
   HANDLE instance_mutex = ::CreateMutexW(nullptr, TRUE, L"Local\\VegamShareSingleInstance");
   if (::GetLastError() == ERROR_ALREADY_EXISTS) {
-    HWND existing = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"VegamShare");
+    // Right-click on several files starts one process per file at once; the
+    // first one may still be opening its window, so wait for it a little.
+    HWND existing = nullptr;
+    for (int i = 0; i < 100 && !existing; i++) {
+      existing = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"VegamShare");
+      if (!existing) ::Sleep(100);
+    }
     if (existing) {
       std::string payload;
       for (const std::string& arg : GetCommandLineArguments()) {

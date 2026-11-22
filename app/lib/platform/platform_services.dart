@@ -414,14 +414,32 @@ Future<void> initDesktop(List<String> args, {required Future<void> Function() on
 
   launchAtStartup.setup(appName: 'VegamShare', appPath: Platform.resolvedExecutable, args: ['--minimized']);
 
-  // Paths from Explorer "Send to" or a second launch arrive here.
+  // Paths from Explorer ("Share with VegamShare", "Send to") or a second
+  // launch arrive here. The right-click menu starts one process per selected
+  // file, so paths arriving close together are offered as one share.
   _shell.setMethodCallHandler((call) async {
     if (call.method == 'openPaths') {
       await _showWindow();
-      _deliver(List<String>.from(call.arguments as List));
+      _collect(List<String>.from(call.arguments as List));
     }
   });
-  _deliver(args.where((a) => !a.startsWith('--')).toList());
+  _collect(args.where((a) => !a.startsWith('--')).toList());
+}
+
+final _collected = <String>[];
+Timer? _collectTimer;
+
+void _collect(List<String> paths) {
+  for (final p in paths) {
+    if (p.isNotEmpty && !_collected.contains(p)) _collected.add(p);
+  }
+  if (_collected.isEmpty) return;
+  _collectTimer?.cancel();
+  _collectTimer = Timer(const Duration(milliseconds: 700), () {
+    final batch = List<String>.of(_collected);
+    _collected.clear();
+    _deliver(batch);
+  });
 }
 
 Future<bool> startupEnabled() async => Platform.isWindows && await launchAtStartup.isEnabled();
