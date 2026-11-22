@@ -476,6 +476,16 @@ Future<void> openClone() async {
   await _native.invokeMethod('openClone');
 }
 
+final _appIcons = <String, Future<Uint8List?>>{};
+
+/// An installed app's launcher icon as PNG (cached for this app run).
+Future<Uint8List?> appIcon(String packageName, int size) {
+  if (!Platform.isAndroid) return Future.value(null);
+  return _appIcons['$packageName|$size'] ??= _native
+      .invokeMethod<Uint8List>('appIcon', {'packageName': packageName, 'size': size})
+      .catchError((_) => null);
+}
+
 /// Lists all user-installed apps on this device.
 Future<List<InstalledAppInfo>> listUserApps() async {
   if (!Platform.isAndroid) return [];

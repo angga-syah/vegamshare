@@ -25,13 +25,20 @@ object AppSendManager {
         val splitApkPaths: List<String>,
     )
 
-    /** Returns all user-installed (non-system) apps. */
+    /**
+     * User-installed apps, plus preinstalled ones updated from a store (realme's
+     * File Manager, Google apps): their current APK lives in /data/app like any
+     * other app's.
+     */
     fun listUserApps(context: Context): List<InstalledApp> {
         val pm = context.packageManager
         @Suppress("DEPRECATION")
-        val packages = pm.getInstalledPackages(PackageManager.GET_META_DATA)
+        val packages = pm.getInstalledPackages(0)
         return packages
-            .filter { pi -> pi.applicationInfo?.flags?.and(ApplicationInfo.FLAG_SYSTEM) == 0 }
+            .filter { pi ->
+                val flags = pi.applicationInfo?.flags ?: return@filter false
+                (flags and ApplicationInfo.FLAG_SYSTEM) == 0 || (flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+            }
             .map { pi ->
                 val ai = pi.applicationInfo!!
                 InstalledApp(
@@ -43,6 +50,23 @@ object AppSendManager {
             }
             .sortedBy { it.label.lowercase() }
     }
+
+    /** The app's launcher icon as PNG, [size] px square; null if it has none. */
+    fun iconPng(context: Context, pkg: String, size: Int): ByteArray? {
+        val d = runCatching { context.packageManager.getApplicationIcon(pkg) }.getOrNull() ?: return null
+        val s = size.coerceIn(24, 256)
+        val bmp = android.graphics.Bitmap.createBitmap(s, s, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bmp)
+        d.setBounds(0, 0, s, s)
+        d.draw(canvas)
+        val out = java.io.ByteArrayOutputStream()
+        bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+        bmp.recycle()
+        return out.toByteArray()
+    }
+
+    /** Several at once while the list scrolls. */
+    val iconExecutor = java.util.concurrent.Executors.newFixedThreadPool(2)
 
     /**
      * Files of the bundle as maps for Dart (relPath, path, size, mtime, viaHelper).

@@ -193,7 +193,7 @@ class _SendAppPageState extends State<SendAppPage> with WidgetsBindingObserver {
                             final app = _filtered[i];
                             final sending = _stagingPkg == app.packageName;
                             return ListTile(
-                              leading: const Icon(Icons.android),
+                              leading: _AppIcon(app.packageName),
                               title: Text(app.label),
                               subtitle: Text(app.packageName, style: const TextStyle(fontSize: 12)),
                               trailing: sending
@@ -206,6 +206,27 @@ class _SendAppPageState extends State<SendAppPage> with WidgetsBindingObserver {
                 ),
               ],
             ),
+    );
+  }
+}
+
+/// The app's own launcher icon; the generic Android one while it loads.
+class _AppIcon extends StatelessWidget {
+  const _AppIcon(this.packageName);
+  final String packageName;
+
+  @override
+  Widget build(BuildContext context) {
+    final px = (40 * MediaQuery.devicePixelRatioOf(context)).round();
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: FutureBuilder(
+        future: appIcon(packageName, px),
+        builder: (context, snap) => snap.data == null
+            ? const Icon(Icons.android, size: 32)
+            : Image.memory(snap.data!, gaplessPlayback: true),
+      ),
     );
   }
 }

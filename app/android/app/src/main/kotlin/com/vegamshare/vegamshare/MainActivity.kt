@@ -271,6 +271,14 @@ class MainActivity : FlutterActivity() {
                         Thread { runCatching { Priv.service?.cancel() } }.start()
                         result.success(null)
                     }
+                    "appIcon" -> {
+                        val pkg = call.argument<String>("packageName") ?: ""
+                        val size = call.argument<Int>("size") ?: 96
+                        AppSendManager.iconExecutor.execute {
+                            val png = AppSendManager.iconPng(this@MainActivity, pkg, size)
+                            main.post { result.success(png) }
+                        }
+                    }
                     "listUserApps" -> Thread {
                         val apps = AppSendManager.listUserApps(this@MainActivity)
                         val list = apps.map { app ->
