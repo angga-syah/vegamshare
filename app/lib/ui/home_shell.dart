@@ -245,7 +245,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       ),
     ).then((install) async {
       if (install != true) return;
-      if (Platform.isAndroid && !await shizukuRunning()) {
+      if (Platform.isAndroid && !await shizukuRunning() && !await autoStartHelper()) {
         final c = _messengerKey.currentContext ?? context;
         if (!c.mounted) return;
         final setup = await showDialog<bool>(

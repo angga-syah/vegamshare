@@ -19,7 +19,9 @@
     <string name="setup_step2_button">Pair &amp; Start</string>
     <string name="setup_status_pairing">Pairing…</string>
     <string name="setup_status_connecting">Connecting to ADB and starting server…</string>
-    <string name="setup_status_done">Helper started. You can now send and receive apps with their data.\n\nAfter a restart, just turn on Wireless debugging and tap Setup again; no code needed.</string>
+    <string name="setup_status_auto">Turning on Wireless debugging and starting the helper…</string>
+    <string name="setup_auto_failed">Could not start the helper automatically (Wireless debugging needs Wi-Fi). Use the steps below.</string>
+    <string name="setup_status_done">Helper started. You can now send and receive apps with their data.\n\nAfter a restart nothing to do: on Wi-Fi, VegamShare turns Wireless debugging on and starts the helper by itself when needed.</string>
     <string name="setup_status_error">Setup failed: %s</string>
     <string name="setup_done">Done</string>
     <string name="setup_manual">Enter the code in this screen instead</string>

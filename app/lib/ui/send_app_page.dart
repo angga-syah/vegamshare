@@ -48,6 +48,12 @@ class _SendAppPageState extends State<SendAppPage> with WidgetsBindingObserver {
   Future<void> _init() async {
     final running = await shizukuRunning();
     final apps = await listUserApps();
+    // Start the helper while the user picks an app, when that needs no user step.
+    if (!running) {
+      autoStartHelper().then((ok) {
+        if (ok && mounted) setState(() => _shizukuOk = true);
+      });
+    }
     if (mounted) {
       setState(() {
         _shizukuOk = running;
@@ -69,11 +75,14 @@ class _SendAppPageState extends State<SendAppPage> with WidgetsBindingObserver {
 
   /// The helper may still be connecting right after the app (re)started.
   Future<bool> _helperReady() async {
-    for (var i = 0; i < 10; i++) {
+    for (var i = 0; i < 6; i++) {
       if (await shizukuRunning()) return true;
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
-    return false;
+    // Paired before: start it now instead of sending the user to Settings.
+    final ok = await autoStartHelper();
+    if (mounted && ok != _shizukuOk) setState(() => _shizukuOk = ok);
+    return ok;
   }
 
   Future<void> _send(InstalledAppInfo app) async {

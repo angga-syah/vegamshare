@@ -1,6 +1,9 @@
 package com.vegamshare.vegamshare
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.provider.Settings
 import android.util.Log
 import moe.shizuku.manager.adb.AdbClient
 import moe.shizuku.manager.adb.AdbKey
@@ -94,7 +97,44 @@ object EmbeddedServer {
             Thread.sleep(200)
         }
         Log.d(TAG, "Server started successfully")
+        // From now on the app may switch Wireless debugging on itself (see autoStart).
+        if (!canSwitchAdb(context)) {
+            runCatching { Priv.sh("pm", "grant", context.packageName, Manifest.permission.WRITE_SECURE_SETTINGS) }
+                .onSuccess { Log.d(TAG, "WRITE_SECURE_SETTINGS grant: ${it.code}") }
+        }
     }
+
+    fun canSwitchAdb(context: Context) =
+        context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
+
+    /**
+     * Paired before: switch Wireless debugging on and start the helper, with no
+     * trip to Settings and no code. Needs Wi-Fi (Android allows Wireless debugging
+     * only there). Runs only when the user asks for something that needs the
+     * helper, never in the background. Call off the main thread.
+     */
+    fun autoStart(context: Context): Boolean {
+        if (Priv.service != null) return true
+        if (!wasPaired(context) || !canSwitchAdb(context)) return false
+        val cr = context.contentResolver
+        if (Settings.Global.getInt(cr, ADB_WIFI, 0) != 1) {
+            if (!runCatching { Settings.Global.putInt(cr, ADB_WIFI, 1) }.getOrDefault(false)) return false
+            Thread.sleep(1500) // adbd needs a moment to open its port
+        }
+        repeat(2) {
+            if (Settings.Global.getInt(cr, ADB_WIFI, 0) != 1) return false // no Wi-Fi: Android turned it back off
+            try {
+                connectAndStart(context, LOCALHOST)
+                return true
+            } catch (e: Exception) {
+                Log.d(TAG, "autoStart: ${e.message}")
+                Thread.sleep(1500)
+            }
+        }
+        return Priv.service != null
+    }
+
+    private const val ADB_WIFI = "adb_wifi_enabled"
 
     private const val BINDER_TIMEOUT_MS = 10_000L
     private const val LOCALHOST = "127.0.0.1"

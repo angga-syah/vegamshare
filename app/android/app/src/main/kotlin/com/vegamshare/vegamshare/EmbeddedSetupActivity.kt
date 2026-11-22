@@ -80,6 +80,32 @@ class EmbeddedSetupActivity : AppCompatActivity() {
         retryButton.setOnClickListener {
             showStep(0)
         }
+
+        // Paired before on this phone: no Settings, no code.
+        if (savedInstanceState == null && Priv.service == null &&
+            EmbeddedServer.wasPaired(this) && EmbeddedServer.canSwitchAdb(this)
+        ) autoStart()
+    }
+
+    private fun autoStart() {
+        showStep(2)
+        setupProgress.visibility = View.VISIBLE
+        doneButton.visibility = View.GONE
+        retryButton.visibility = View.GONE
+        setupStatus.text = getString(R.string.setup_status_auto)
+        Thread {
+            val ok = runCatching { EmbeddedServer.autoStart(this) }.getOrDefault(false)
+            runOnUiThread {
+                if (ok) {
+                    // Back to what the user was doing.
+                    setResult(RESULT_OK)
+                    finish()
+                } else {
+                    showStep(0) // usually no Wi-Fi: the normal steps
+                    android.widget.Toast.makeText(this, R.string.setup_auto_failed, android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

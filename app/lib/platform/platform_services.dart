@@ -482,6 +482,15 @@ Future<bool> shizukuRunning() async {
   } catch (_) { return false; }
 }
 
+/// Paired before: switch Wireless debugging on and start the helper with no
+/// setup screen. False when that is not possible (never paired, no Wi-Fi).
+Future<bool> autoStartHelper() async {
+  if (!Platform.isAndroid) return false;
+  try {
+    return await _native.invokeMethod<bool>('autoStartHelper') ?? false;
+  } catch (_) { return false; }
+}
+
 /// Opens the EmbeddedSetupActivity (pair + start Shizuku via Wireless Debugging).
 Future<void> openShizukuSetup() async {
   if (!Platform.isAndroid) return;

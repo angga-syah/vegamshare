@@ -17,7 +17,9 @@
     <string name="setup_step2_button">Pasangkan &amp; Mulai</string>
     <string name="setup_status_pairing">Memasangkan…</string>
     <string name="setup_status_connecting">Menyambung ke ADB dan menjalankan server…</string>
-    <string name="setup_status_done">Helper berjalan. Sekarang bisa kirim dan terima aplikasi beserta datanya.\n\nSetelah restart HP, cukup aktifkan Debug nirkabel lalu ketuk Setup lagi, tanpa kode.</string>
+    <string name="setup_status_auto">Menyalakan Debug nirkabel dan menjalankan helper…</string>
+    <string name="setup_auto_failed">Helper tidak bisa dijalankan otomatis (Debug nirkabel butuh Wi-Fi). Ikuti langkah di bawah.</string>
+    <string name="setup_status_done">Helper berjalan. Sekarang bisa kirim dan terima aplikasi beserta datanya.\n\nSetelah restart HP tidak perlu apa-apa: selama tersambung Wi-Fi, VegamShare menyalakan Debug nirkabel dan menjalankan helper sendiri saat dibutuhkan.</string>
     <string name="setup_status_error">Setup gagal: %s</string>
     <string name="setup_done">Selesai</string>
     <string name="setup_manual">Masukkan kode di layar ini saja</string>

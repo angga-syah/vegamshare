@@ -195,6 +195,11 @@ class MainActivity : FlutterActivity() {
                     // ---- Privileged helper (Wireless debugging) --------------------------
                     "shizukuAvailable" -> result.success(EmbeddedServer.isAvailable())
                     "shizukuRunning" -> result.success(Priv.state() == Priv.State.READY)
+                    // Paired before: start the helper with no setup screen (null: not possible here).
+                    "autoStartHelper" -> if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) result.success(false) else Thread {
+                        val ok = runCatching { EmbeddedServer.autoStart(this@MainActivity) }.getOrDefault(false)
+                        main.post { result.success(ok) }
+                    }.start()
                     "openClone" -> {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             startActivity(Intent(this@MainActivity, CloneActivity::class.java))

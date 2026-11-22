@@ -71,6 +71,11 @@ class PairingService : Service() {
     /** Already paired: as soon as Wireless debugging is on, start without a code. */
     private fun reconnectLoop() {
         Thread {
+            // Allowed to switch Wireless debugging on: do it instead of waiting for the user.
+            if (EmbeddedServer.autoStart(this)) {
+                finishOk()
+                return@Thread
+            }
             val until = System.currentTimeMillis() + RECONNECT_FOR_MS
             while (System.currentTimeMillis() < until && Priv.service == null && !stopped) {
                 if (busy) { Thread.sleep(1000); continue }
