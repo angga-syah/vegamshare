@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -42,8 +43,10 @@ const _videoExt = {'mp4', '3gp', 'mkv', 'webm', 'mov'};
 /// Thumbnails made natively, kept for this app run (bounded).
 final _thumbs = <String, Future<Uint8List?>>{};
 
+String _thumbKey(WaFile f, int width) => '${f.path}|$width|${f.modified}';
+
 Future<Uint8List?> _thumb(WaFile f, int width) {
-  final key = '${f.path}|$width|${f.modified}';
+  final key = _thumbKey(f, width);
   if (_thumbs.length > 500) _thumbs.clear();
   return _thumbs[key] ??= () async {
     if (f.isPdf) return pdfPage(f.path, 0, width);
@@ -58,7 +61,9 @@ Future<Uint8List?> _thumb(WaFile f, int width) {
 
 /// PDF page, photo or video thumbnail. [loading] until it is there; when
 /// there is none, [fallback] (defaults to [loading]).
-class _NativeThumb extends StatelessWidget {
+/// Asks only once the tile stayed on screen for a moment: a fast fling would
+/// otherwise queue hundreds of thumbnails the user never sees.
+class _NativeThumb extends StatefulWidget {
   const _NativeThumb({required this.file, required this.width, required this.loading, this.fallback});
   final WaFile file;
   final int width;
@@ -66,14 +71,58 @@ class _NativeThumb extends StatelessWidget {
   final Widget? fallback;
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
-        future: _thumb(file, width),
-        builder: (context, snap) => snap.data != null
-            ? Image.memory(snap.data!, fit: BoxFit.cover, alignment: Alignment.topCenter, gaplessPlayback: true)
-            : snap.connectionState == ConnectionState.done
-                ? fallback ?? loading
-                : loading,
-      );
+  State<_NativeThumb> createState() => _NativeThumbState();
+}
+
+class _NativeThumbState extends State<_NativeThumb> {
+  Future<Uint8List?>? _future;
+  Timer? _wait;
+
+  @override
+  void initState() {
+    super.initState();
+    _request();
+  }
+
+  @override
+  void didUpdateWidget(_NativeThumb old) {
+    super.didUpdateWidget(old);
+    if (_thumbKey(old.file, old.width) != _thumbKey(widget.file, widget.width)) _request();
+  }
+
+  void _request() {
+    _wait?.cancel();
+    final cached = _thumbs[_thumbKey(widget.file, widget.width)];
+    if (cached != null) {
+      _future = cached;
+      return;
+    }
+    _future = null;
+    _wait = Timer(const Duration(milliseconds: 150), () {
+      if (mounted) setState(() => _future = _thumb(widget.file, widget.width));
+    });
+  }
+
+  @override
+  void dispose() {
+    _wait?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = widget.fallback;
+    final loading = widget.loading;
+    if (_future == null) return loading;
+    return FutureBuilder<Uint8List?>(
+      future: _future,
+      builder: (context, snap) => snap.data != null
+          ? Image.memory(snap.data!, fit: BoxFit.cover, alignment: Alignment.topCenter, gaplessPlayback: true)
+          : snap.connectionState == ConnectionState.done
+          ? fallback ?? loading
+          : loading,
+    );
+  }
 }
 
 const _storage = '/storage/emulated/0';
@@ -266,8 +315,28 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
   void _tap(WaFile f) {
     if (_selected.isNotEmpty) return _toggle(f);
     if (f.isPdf) {
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => _PdfView(
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => _PdfView(
+            file: f,
+            onSend: () {
+              Navigator.of(context)
+                ..pop()
+                ..pop([f.path]);
+            },
+            onSelect: () => _toggle(f),
+          ),
+        ),
+      );
+      return;
+    }
+    if (!f.isImage) {
+      OpenFilex.open(f.path); // documents, audio, video: the phone's own viewer
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _ImageView(
           file: f,
           onSend: () {
             Navigator.of(context)
@@ -276,24 +345,8 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
           },
           onSelect: () => _toggle(f),
         ),
-      ));
-      return;
-    }
-    if (!f.isImage) {
-      OpenFilex.open(f.path); // documents, audio, video: the phone's own viewer
-      return;
-    }
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => _ImageView(
-        file: f,
-        onSend: () {
-          Navigator.of(context)
-            ..pop()
-            ..pop([f.path]);
-        },
-        onSelect: () => _toggle(f),
       ),
-    ));
+    );
   }
 
   @override
@@ -320,37 +373,44 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
             ),
             if (_selected.isNotEmpty) TextButton(onPressed: () => setState(_selected.clear), child: Text(tr('cancel'))),
           ],
-          bottom: TabBar(tabs: [
-            Tab(icon: const Icon(Icons.description_outlined), text: tr('wa_docs')),
-            Tab(icon: const Icon(Icons.photo_library_outlined), text: tr('wa_media')),
-          ]),
+          bottom: TabBar(
+            tabs: [
+              Tab(icon: const Icon(Icons.description_outlined), text: tr('wa_docs')),
+              Tab(icon: const Icon(Icons.photo_library_outlined), text: tr('wa_media')),
+            ],
+          ),
         ),
         body: !_permission
             ? Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text(tr('storage_permission'), textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    FilledButton(onPressed: _grant, child: Text(tr('grant'))),
-                  ]),
-                ),
-              )
-            : Column(children: [
-                if (_scanning && _all != null) const LinearProgressIndicator(minHeight: 2),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: FilterChip(label: Text(tr('wa_sent')), selected: _showSent, onSelected: (v) => setState(() => _showSent = v)),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(tr('storage_permission'), textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      FilledButton(onPressed: _grant, child: Text(tr('grant'))),
+                    ],
                   ),
                 ),
-                Expanded(
-                  child: _all == null
-                      ? const Center(child: CircularProgressIndicator())
-                      : TabBarView(children: [_docs(context), _media(context)]),
-                ),
-              ]),
+              )
+            : Column(
+                children: [
+                  if (_scanning && _all != null) const LinearProgressIndicator(minHeight: 2),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilterChip(label: Text(tr('wa_sent')), selected: _showSent, onSelected: (v) => setState(() => _showSent = v)),
+                    ),
+                  ),
+                  Expanded(
+                    child: _all == null
+                        ? const Center(child: CircularProgressIndicator())
+                        : TabBarView(children: [_docs(context), _media(context)]),
+                  ),
+                ],
+              ),
         floatingActionButton: _selected.isEmpty
             ? null
             : FloatingActionButton.extended(
@@ -398,12 +458,14 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
           return ListTile(
             leading: SizedBox(width: 48, height: 48, child: _docLeading(f, scheme, dpr)),
             title: Text(f.name, maxLines: 2, overflow: TextOverflow.ellipsis),
-            subtitle: Text([
-              formatBytes(f.size),
-              if (f.ext.isNotEmpty) f.ext.toUpperCase(),
-              '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
-              if (f.sent) tr('wa_sent_tag'),
-            ].join(' · ')),
+            subtitle: Text(
+              [
+                formatBytes(f.size),
+                if (f.ext.isNotEmpty) f.ext.toUpperCase(),
+                '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
+                if (f.sent) tr('wa_sent_tag'),
+              ].join(' · '),
+            ),
             trailing: Checkbox(value: selected, onChanged: (_) => _toggle(f)),
             selected: selected,
             onTap: () => _tap(f),
@@ -432,42 +494,55 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
           return GestureDetector(
             onTap: () => _tap(f),
             onLongPress: () => _toggle(f),
-            child: Stack(fit: StackFit.expand, children: [
-              if (f.isImage)
-                _NativeThumb(
-                  file: f,
-                  width: (130 * dpr).round(),
-                  loading: ColoredBox(color: scheme.surfaceContainerHighest),
-                  fallback: Image.file(
-                    File(f.path),
-                    fit: BoxFit.cover,
-                    cacheWidth: (130 * dpr).round(),
-                    errorBuilder: (_, _, _) => ColoredBox(color: scheme.surfaceContainerHighest, child: const Icon(Icons.broken_image_outlined)),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (f.isImage)
+                  _NativeThumb(
+                    file: f,
+                    width: (130 * dpr).round(),
+                    loading: ColoredBox(color: scheme.surfaceContainerHighest),
+                    fallback: Image.file(
+                      File(f.path),
+                      fit: BoxFit.cover,
+                      cacheWidth: (130 * dpr).round(),
+                      errorBuilder: (_, _, _) =>
+                          ColoredBox(color: scheme.surfaceContainerHighest, child: const Icon(Icons.broken_image_outlined)),
+                    ),
+                  )
+                else ...[
+                  _NativeThumb(
+                    file: f,
+                    width: (130 * dpr).round(),
+                    loading: ColoredBox(color: scheme.surfaceContainerHighest),
                   ),
-                )
-              else ...[
-                _NativeThumb(
-                  file: f,
-                  width: (130 * dpr).round(),
-                  loading: ColoredBox(color: scheme.surfaceContainerHighest),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.play_circle_outline, size: 36, color: Colors.white, shadows: [Shadow(blurRadius: 4)]),
+                      const SizedBox(height: 4),
+                      Text(
+                        formatBytes(f.size),
+                        style: const TextStyle(fontSize: 11, color: Colors.white, shadows: [Shadow(blurRadius: 3)]),
+                      ),
+                    ],
+                  ),
+                ],
+                if (selected) ColoredBox(color: scheme.primary.withValues(alpha: 0.35)),
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: GestureDetector(
+                    onTap: () => _toggle(f),
+                    child: Icon(
+                      selected ? Icons.check_circle : Icons.radio_button_unchecked,
+                      color: selected ? scheme.primary : Colors.white,
+                      shadows: const [Shadow(blurRadius: 3)],
+                    ),
+                  ),
                 ),
-                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  const Icon(Icons.play_circle_outline, size: 36, color: Colors.white, shadows: [Shadow(blurRadius: 4)]),
-                  const SizedBox(height: 4),
-                  Text(formatBytes(f.size), style: const TextStyle(fontSize: 11, color: Colors.white, shadows: [Shadow(blurRadius: 3)])),
-                ]),
               ],
-              if (selected) ColoredBox(color: scheme.primary.withValues(alpha: 0.35)),
-              Positioned(
-                right: 4,
-                top: 4,
-                child: GestureDetector(
-                  onTap: () => _toggle(f),
-                  child: Icon(selected ? Icons.check_circle : Icons.radio_button_unchecked,
-                      color: selected ? scheme.primary : Colors.white, shadows: const [Shadow(blurRadius: 3)]),
-                ),
-              ),
-            ]),
+            ),
           );
         },
       ),
@@ -492,15 +567,15 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
   }
 
   static IconData _docIcon(String ext) => switch (ext) {
-        'pdf' => Icons.picture_as_pdf_outlined,
-        'doc' || 'docx' || 'odt' || 'txt' || 'rtf' => Icons.description_outlined,
-        'xls' || 'xlsx' || 'csv' || 'ods' => Icons.table_chart_outlined,
-        'ppt' || 'pptx' => Icons.slideshow_outlined,
-        'zip' || 'rar' || '7z' => Icons.folder_zip_outlined,
-        'apk' => Icons.android,
-        'mp3' || 'm4a' || 'aac' || 'ogg' || 'opus' || 'wav' || 'amr' => Icons.audiotrack_outlined,
-        _ => Icons.insert_drive_file_outlined,
-      };
+    'pdf' => Icons.picture_as_pdf_outlined,
+    'doc' || 'docx' || 'odt' || 'txt' || 'rtf' => Icons.description_outlined,
+    'xls' || 'xlsx' || 'csv' || 'ods' => Icons.table_chart_outlined,
+    'ppt' || 'pptx' => Icons.slideshow_outlined,
+    'zip' || 'rar' || '7z' => Icons.folder_zip_outlined,
+    'apk' => Icons.android,
+    'mp3' || 'm4a' || 'aac' || 'ogg' || 'opus' || 'wav' || 'amr' => Icons.audiotrack_outlined,
+    _ => Icons.insert_drive_file_outlined,
+  };
 }
 
 /// Full-screen photo with zoom; send it right from here.
@@ -561,13 +636,19 @@ class _PdfViewState extends State<_PdfView> {
       appBar: AppBar(
         title: FutureBuilder<int?>(
           future: _count,
-          builder: (context, snap) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(widget.file.name, style: const TextStyle(fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text(
-              [formatBytes(widget.file.size), if (snap.data != null) tr('wa_pages', {'n': snap.data!})].join(' · '),
-              style: const TextStyle(fontSize: 12),
-            ),
-          ]),
+          builder: (context, snap) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.file.name, style: const TextStyle(fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(
+                [
+                  formatBytes(widget.file.size),
+                  if (snap.data != null) tr('wa_pages', {'n': snap.data!}),
+                ].join(' · '),
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
         ),
         actions: [
           IconButton(tooltip: tr('wa_open_with'), icon: const Icon(Icons.open_in_new), onPressed: () => OpenFilex.open(widget.file.path)),
@@ -590,11 +671,14 @@ class _PdfViewState extends State<_PdfView> {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(tr('wa_no_preview'), textAlign: TextAlign.center),
-                  const SizedBox(height: 16),
-                  FilledButton(onPressed: () => OpenFilex.open(widget.file.path), child: Text(tr('wa_open_with'))),
-                ]),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(tr('wa_no_preview'), textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    FilledButton(onPressed: () => OpenFilex.open(widget.file.path), child: Text(tr('wa_open_with'))),
+                  ],
+                ),
               ),
             );
           }
