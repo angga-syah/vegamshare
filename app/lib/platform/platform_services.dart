@@ -80,6 +80,20 @@ Future<Uint8List?> pdfPage(String path, int page, int width) => _preview('pdfPag
 
 Future<Uint8List?> videoFrame(String path, int width) => _preview('videoFrame', {'path': path, 'width': width});
 
+/// Android's own gallery thumbnail for a MediaStore photo or video.
+Future<Uint8List?> mediaThumb(int id, bool video, int width) => _preview('mediaThumb', {'id': id, 'video': video, 'width': width});
+
+/// WhatsApp files as MediaStore indexed them (Android 10+), as parallel
+/// lists ids/paths/sizes/mtimes. Null when not available.
+Future<Map<Object?, Object?>?> waFilesIndexed() async {
+  if (!Platform.isAndroid) return null;
+  try {
+    return await _native.invokeMethod<Map<Object?, Object?>>('waFiles');
+  } catch (_) {
+    return null;
+  }
+}
+
 Future<Uint8List?> _preview(String method, Map<String, Object> args) async {
   if (!Platform.isAndroid) return null;
   try {

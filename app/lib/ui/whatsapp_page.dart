@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 
@@ -23,8 +23,9 @@ class WhatsAppPage extends StatefulWidget {
 enum WaTab { docs, media }
 
 class WaFile {
-  WaFile(this.path, this.size, this.modified, this.tab, this.sent);
+  WaFile(this.path, this.size, this.modified, this.tab, this.sent, [this.id = -1]);
   final String path;
+  final int id; // MediaStore row, -1 when found by walking the folders
   final int size;
   final int modified; // ms since epoch
   final WaTab tab;
@@ -44,22 +45,34 @@ final _thumbs = <String, Future<Uint8List?>>{};
 Future<Uint8List?> _thumb(WaFile f, int width) {
   final key = '${f.path}|$width|${f.modified}';
   if (_thumbs.length > 500) _thumbs.clear();
-  return _thumbs[key] ??= f.isPdf ? pdfPage(f.path, 0, width) : videoFrame(f.path, width);
+  return _thumbs[key] ??= () async {
+    if (f.isPdf) return pdfPage(f.path, 0, width);
+    // The gallery's cached thumbnail is far cheaper than decoding the file.
+    if (f.id >= 0) {
+      final t = await mediaThumb(f.id, f.isVideo, width);
+      if (t != null) return t;
+    }
+    return f.isVideo ? videoFrame(f.path, width) : null;
+  }();
 }
 
-/// First PDF page or a video frame; [fallback] while loading or when there is none.
+/// PDF page, photo or video thumbnail. [loading] until it is there; when
+/// there is none, [fallback] (defaults to [loading]).
 class _NativeThumb extends StatelessWidget {
-  const _NativeThumb({required this.file, required this.width, required this.fallback});
+  const _NativeThumb({required this.file, required this.width, required this.loading, this.fallback});
   final WaFile file;
   final int width;
-  final Widget fallback;
+  final Widget loading;
+  final Widget? fallback;
 
   @override
   Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
         future: _thumb(file, width),
-        builder: (context, snap) => snap.data == null
-            ? fallback
-            : Image.memory(snap.data!, fit: BoxFit.cover, alignment: Alignment.topCenter, gaplessPlayback: true),
+        builder: (context, snap) => snap.data != null
+            ? Image.memory(snap.data!, fit: BoxFit.cover, alignment: Alignment.topCenter, gaplessPlayback: true)
+            : snap.connectionState == ConnectionState.done
+                ? fallback ?? loading
+                : loading,
       );
 }
 
@@ -84,10 +97,43 @@ WaTab? _tabOf(String folder) {
   };
 }
 
+/// Tab and "sent" flag of a file under a WhatsApp root, null for files the
+/// page leaves out (stickers, private, hidden, unfinished downloads).
+(WaTab, bool)? _classify(String path) {
+  for (final root in _roots) {
+    if (!path.startsWith('$root/')) continue;
+    final parts = path.substring(root.length + 1).split('/');
+    if (parts.length < 2 || parts.last.startsWith('.')) return null;
+    final tab = _tabOf(parts.first);
+    if (tab == null) return null;
+    final sub = parts.length > 2 ? parts[1] : '';
+    if (sub == 'Private') return null;
+    return (tab, sub == 'Sent');
+  }
+  return null;
+}
+
+/// MediaStore rows (parallel lists from [waFilesIndexed]) as page entries.
+List<WaFile> _fromIndex(Map<Object?, Object?> m) {
+  final ids = (m['ids'] as List).cast<int>();
+  final paths = (m['paths'] as List).cast<String>();
+  final sizes = (m['sizes'] as List).cast<int>();
+  final mtimes = (m['mtimes'] as List).cast<int>();
+  final out = <WaFile>[];
+  for (var i = 0; i < paths.length; i++) {
+    final c = _classify(paths[i]);
+    if (c != null) out.add(WaFile(paths[i], sizes[i], mtimes[i], c.$1, c.$2, ids[i]));
+  }
+  return out;
+}
+
 /// Runs in a background isolate: WhatsApp folders can hold thousands of files,
 /// and each stat goes through Android's slow storage layer. Sends batches as
-/// it goes so the page fills in right away.
-void _scan(SendPort port) {
+/// it goes so the page fills in right away. With sentOnly it walks just the
+/// "Sent" folders, which MediaStore indexes only in part (WhatsApp hides them
+/// with .nomedia).
+void _scan((SendPort, bool) args) {
+  final (port, sentOnly) = args;
   var batch = <WaFile>[];
   var last = DateTime.now();
   void flush() {
@@ -112,8 +158,10 @@ void _scan(SendPort port) {
       if (top is! Directory) continue;
       final tab = _tabOf(top.path.substring(top.path.lastIndexOf('/') + 1));
       if (tab == null) continue;
+      final walk = sentOnly ? Directory('${top.path}/Sent') : top;
       try {
-        for (final e in top.listSync(recursive: true, followLinks: false)) {
+        if (sentOnly && !walk.existsSync()) continue;
+        for (final e in walk.listSync(recursive: true, followLinks: false)) {
           if (e is! File) continue;
           final rel = e.path.substring(top.path.length + 1);
           final name = rel.substring(rel.lastIndexOf('/') + 1);
@@ -167,21 +215,30 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
       return;
     }
     // Show the previous scan at once; the fresh one replaces it when done.
-    final fresh = <WaFile>[];
-    final port = ReceivePort();
     setState(() {
       _permission = true;
       _scanning = true;
       _all = _cache;
     });
+    final sw = Stopwatch()..start();
+    // Android 10+: MediaStore has nearly all of it indexed; only "Sent" is walked.
+    final index = await waFilesIndexed();
+    final fresh = index == null ? <WaFile>[] : await compute(_fromIndex, index);
+    if (index != null) {
+      debugPrint('WhatsApp index: ${fresh.length} files in ${sw.elapsedMilliseconds} ms');
+      if (mounted) setState(() => _all = _sorted(fresh));
+    }
+    final known = {for (final f in fresh) f.path};
+    final port = ReceivePort();
     // onExit sends null, also when the scan dies on an error.
-    await Isolate.spawn(_scan, port.sendPort, onExit: port.sendPort);
+    await Isolate.spawn(_scan, (port.sendPort, index != null), onExit: port.sendPort);
     await for (final msg in port) {
       if (msg == null) break;
-      fresh.addAll(msg as List<WaFile>);
-      if (_cache == null && mounted) setState(() => _all = _sorted(fresh));
+      fresh.addAll((msg as List<WaFile>).where((f) => known.add(f.path)));
+      if (_cache == null && index == null && mounted) setState(() => _all = _sorted(fresh));
     }
     port.close();
+    debugPrint('WhatsApp files: ${fresh.length} in ${sw.elapsedMilliseconds} ms');
     _cache = _sorted(fresh);
     if (mounted) {
       setState(() {
@@ -377,17 +434,22 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
             onLongPress: () => _toggle(f),
             child: Stack(fit: StackFit.expand, children: [
               if (f.isImage)
-                Image.file(
-                  File(f.path),
-                  fit: BoxFit.cover,
-                  cacheWidth: (130 * dpr).round(),
-                  errorBuilder: (_, _, _) => ColoredBox(color: scheme.surfaceContainerHighest, child: const Icon(Icons.broken_image_outlined)),
+                _NativeThumb(
+                  file: f,
+                  width: (130 * dpr).round(),
+                  loading: ColoredBox(color: scheme.surfaceContainerHighest),
+                  fallback: Image.file(
+                    File(f.path),
+                    fit: BoxFit.cover,
+                    cacheWidth: (130 * dpr).round(),
+                    errorBuilder: (_, _, _) => ColoredBox(color: scheme.surfaceContainerHighest, child: const Icon(Icons.broken_image_outlined)),
+                  ),
                 )
               else ...[
                 _NativeThumb(
                   file: f,
                   width: (130 * dpr).round(),
-                  fallback: ColoredBox(color: scheme.surfaceContainerHighest),
+                  loading: ColoredBox(color: scheme.surfaceContainerHighest),
                 ),
                 Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   const Icon(Icons.play_circle_outline, size: 36, color: Colors.white, shadows: [Shadow(blurRadius: 4)]),
@@ -419,8 +481,13 @@ class _WhatsAppPageState extends State<WhatsAppPage> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(4),
       child: f.isImage
-          ? Image.file(File(f.path), fit: BoxFit.cover, cacheWidth: (48 * dpr).round(), errorBuilder: (_, _, _) => icon)
-          : _NativeThumb(file: f, width: (48 * dpr).round(), fallback: icon),
+          ? _NativeThumb(
+              file: f,
+              width: (48 * dpr).round(),
+              loading: icon,
+              fallback: Image.file(File(f.path), fit: BoxFit.cover, cacheWidth: (48 * dpr).round(), errorBuilder: (_, _, _) => icon),
+            )
+          : _NativeThumb(file: f, width: (48 * dpr).round(), loading: icon),
     );
   }
 

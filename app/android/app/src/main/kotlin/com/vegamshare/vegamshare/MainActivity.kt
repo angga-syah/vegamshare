@@ -283,6 +283,20 @@ class MainActivity : FlutterActivity() {
                         }
                         main.post { result.success(list) }
                     }.start()
+                    "waFiles" -> if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) result.success(null) else Thread {
+                        val r = runCatching { WaFiles.list(this@MainActivity) }
+                        r.exceptionOrNull()?.let { android.util.Log.w("VegamShare", "waFiles: ${it.message}") }
+                        main.post { result.success(r.getOrNull()) } // null: Dart walks the folders instead
+                    }.start()
+                    "mediaThumb" -> if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) result.success(null) else WaFiles.executor.execute {
+                        val r = WaFiles.thumb(
+                            this@MainActivity,
+                            (call.argument<Number>("id") ?: -1).toLong(),
+                            call.argument<Boolean>("video") == true,
+                            call.argument<Int>("width") ?: 300,
+                        )
+                        main.post { result.success(r) }
+                    }
                     "pdfPageCount", "pdfPage", "videoFrame" -> Previews.executor.execute {
                         val path = call.argument<String>("path")!!
                         val width = call.argument<Int>("width") ?: 300
