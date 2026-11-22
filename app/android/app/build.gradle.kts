@@ -27,7 +27,10 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.vegamshare.vegamshare"
+        // Since 0.5.0: the old id was taken before Android developer
+        // verification, which a limited distribution account cannot register.
+        // Kotlin code keeps its namespace (com.vegamshare.vegamshare).
+        applicationId = "id.linuwih.vegamshare"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
